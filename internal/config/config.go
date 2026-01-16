@@ -13,6 +13,7 @@ type Config struct {
 	ProjectAPIKey string `yaml:"project_api_key"`
 	InstanceURL   string `yaml:"instance_url"`
 	PollInterval  int    `yaml:"poll_interval"` // seconds
+	Debug         bool   `yaml:"-"`              // runtime only, not saved to file
 }
 
 const (
