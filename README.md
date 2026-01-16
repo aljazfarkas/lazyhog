@@ -2,7 +2,26 @@
 
 A blazing-fast Terminal User Interface for PostHog, built with Go and the Charm stack.
 
+**Like lazygit, but for PostHog** - Navigate your PostHog data with a beautiful sidebar interface.
+
 ## Features
+
+### 🎯 Unified Interface
+Launch `lazyhog` to get a **lazygit-style interface** with sidebar navigation. Switch between views with arrow keys, focus panels with Tab, and never leave your terminal.
+
+```
+┌─────────────┬──────────────────────────────────────┐
+│ lazyhog 🦔  │  📡 Live Events                      │
+│             │                                      │
+│ ▶ 📡 Live   │  2026-01-16 22:15:32                 │
+│   🚩 Flags  │  $pageview /dashboard                │
+│   🔍 Query  │  user@example.com                    │
+│             │                                      │
+│             │  2026-01-16 22:15:28                 │
+│             │  button_clicked upgrade_cta          │
+│             │  user@example.com                    │
+└─────────────┴──────────────────────────────────────┘
+```
 
 ### 📡 Live Events Stream
 Stream events in real-time as they happen in your PostHog instance. Navigate with arrow keys, press Enter to expand JSON details, and see events update every 2 seconds.
@@ -22,13 +41,14 @@ Execute HogQL queries directly from your terminal. View results in a dynamic tab
 ```bash
 git clone https://github.com/aljazfarkas/lazyhog
 cd lazyhog
-go build -o ph cmd/ph/*.go
-sudo mv ph /usr/local/bin/
+go build -o lazyhog cmd/ph/*.go
+sudo mv lazyhog /usr/local/bin/
 ```
 
 ### Using Go Install
 ```bash
 go install github.com/aljazfarkas/lazyhog/cmd/ph@latest
+# Note: Binary will be named 'ph', create alias: alias lazyhog=ph
 ```
 
 ## Quick Start
@@ -37,10 +57,10 @@ go install github.com/aljazfarkas/lazyhog/cmd/ph@latest
 
 ```bash
 # Interactive mode (recommended)
-ph login
+lazyhog login
 
 # Non-interactive mode
-ph login --api-key=phc_xxx --instance-url=https://app.posthog.com
+lazyhog login --api-key=phc_xxx --instance-url=https://app.posthog.com
 ```
 
 Your API key can be found in PostHog → Settings → Project API Key.
@@ -49,25 +69,30 @@ For self-hosted instances, provide your custom URL.
 
 Configuration is saved to `~/.config/ph-tui.yaml` with restricted permissions.
 
-### 2. Start using lazyhog
+### 2. Launch the unified interface
 
 ```bash
-# Stream live events
-ph live
+# Start the lazygit-style interface (recommended)
+lazyhog
 
-# Manage feature flags
-ph flags
-
-# Look up a person
-ph person user@example.com
-
-# Open HogQL console
-ph query
+# Or use individual commands:
+lazyhog live     # Stream live events only
+lazyhog flags    # Manage feature flags only
+lazyhog person user@example.com  # Look up a person
+lazyhog query    # Open HogQL console only
 ```
+
+### 3. Navigate the unified interface
+
+- **↑/↓** or **j/k** - Switch between views in sidebar
+- **Tab** or **→** - Focus the main panel
+- **←** or **Esc** - Return to sidebar
+- **q** - Quit from sidebar, or return to sidebar from panel
+- **Ctrl+C** - Always quits
 
 ## Commands
 
-### `ph login`
+### `lazyhog login`
 Configure your PostHog API credentials.
 
 **Options:**
@@ -77,13 +102,13 @@ Configure your PostHog API credentials.
 **Examples:**
 ```bash
 # Interactive mode
-ph login
+lazyhog login
 
 # With flags
-ph login --api-key=phc_xxx
+lazyhog login --api-key=phc_xxx
 ```
 
-### `ph live`
+### `lazyhog live`
 Stream events in real-time.
 
 **Keyboard shortcuts:**
@@ -92,7 +117,7 @@ Stream events in real-time.
 - `r` - Refresh
 - `q` or `Ctrl+C` - Quit
 
-### `ph flags`
+### `lazyhog flags`
 View and manage feature flags.
 
 **Keyboard shortcuts:**
@@ -103,7 +128,7 @@ View and manage feature flags.
 - `Esc` - Exit search mode
 - `q` or `Ctrl+C` - Quit
 
-### `ph person [distinct_id]`
+### `lazyhog person [distinct_id]`
 Look up a person and their recent activity.
 
 **Keyboard shortcuts:**
@@ -114,11 +139,11 @@ Look up a person and their recent activity.
 
 **Example:**
 ```bash
-ph person user@example.com
-ph person 12345
+lazyhog person user@example.com
+lazyhog person 12345
 ```
 
-### `ph query`
+### `lazyhog query`
 Open the HogQL query console.
 
 **Keyboard shortcuts:**
@@ -174,7 +199,8 @@ poll_interval: 2  # seconds
 git clone https://github.com/aljazfarkas/lazyhog
 cd lazyhog
 go mod download
-go build -o ph cmd/ph/*.go
+go build -o lazyhog cmd/ph/*.go
+./lazyhog  # Launch the unified interface
 ```
 
 ### Running tests
@@ -208,7 +234,7 @@ lazyhog/
 ## Troubleshooting
 
 ### "config file not found" error
-Run `ph login` to set up authentication first.
+Run `lazyhog login` to set up authentication first.
 
 ### API connection errors
 - Verify your API key is correct in `~/.config/ph-tui.yaml`

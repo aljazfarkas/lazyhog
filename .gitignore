@@ -18,6 +18,8 @@ vendor/
 go.work
 
 # Build artifacts
+lazyhog
+lazyhog-*
 ph
 ph-*
 *.tar.gz

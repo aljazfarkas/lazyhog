@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("config file not found. Run 'ph login' to set up authentication")
+			return nil, fmt.Errorf("config file not found. Run 'lazyhog login' to set up authentication")
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}

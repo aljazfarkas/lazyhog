@@ -79,9 +79,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.currentView {
 		case viewLive:
-			m.liveModel, cmd = m.liveModel.Update(panelMsg).(live.Model), cmd
+			var newModel tea.Model
+			newModel, cmd = m.liveModel.Update(panelMsg)
+			m.liveModel = newModel.(live.Model)
 		case viewFlags:
-			m.flagsModel, cmd = m.flagsModel.Update(panelMsg).(flags.Model), cmd
+			var newModel tea.Model
+			newModel, cmd = m.flagsModel.Update(panelMsg)
+			m.flagsModel = newModel.(flags.Model)
 		}
 
 		return m, cmd
@@ -204,14 +208,9 @@ func (m Model) View() string {
 	var panel string
 	switch m.currentView {
 	case viewLive:
-		// Update dimensions for the view
-		msg := tea.WindowSizeMsg{Width: panelWidth, Height: panelHeight}
-		m.liveModel, _ = m.liveModel.Update(msg).(live.Model), nil
 		panel = m.liveModel.View()
 
 	case viewFlags:
-		msg := tea.WindowSizeMsg{Width: panelWidth, Height: panelHeight}
-		m.flagsModel, _ = m.flagsModel.Update(msg).(flags.Model), nil
 		panel = m.flagsModel.View()
 
 	case viewQuery:

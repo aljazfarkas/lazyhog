@@ -6,7 +6,6 @@ import (
 
 	"github.com/aljazfarkas/lazyhog/internal/client"
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // RenderTable renders a query result as a table
