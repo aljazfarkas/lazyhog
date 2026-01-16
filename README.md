@@ -60,10 +60,11 @@ go install github.com/aljazfarkas/lazyhog/cmd/ph@latest
 lazyhog login
 
 # Non-interactive mode
-lazyhog login --api-key=phc_xxx --instance-url=https://app.posthog.com
+lazyhog login --api-key=phx_xxx --instance-url=https://app.posthog.com
 ```
 
-Your API key can be found in PostHog → Settings → Project API Key.
+**Important:** You need a **Personal API Key** (starts with `phx_`) from PostHog → Settings → **Personal API Keys**.
+Project API Keys (`phc_`) are for sending events and won't work with lazyhog.
 
 For self-hosted instances, provide your custom URL.
 
@@ -96,7 +97,7 @@ lazyhog query    # Open HogQL console only
 Configure your PostHog API credentials.
 
 **Options:**
-- `--api-key` - PostHog project API key
+- `--api-key` - PostHog Personal API key (must start with phx_)
 - `--instance-url` - PostHog instance URL (default: https://app.posthog.com)
 
 **Examples:**
@@ -105,7 +106,7 @@ Configure your PostHog API credentials.
 lazyhog login
 
 # With flags
-lazyhog login --api-key=phc_xxx
+lazyhog login --api-key=phx_xxx
 ```
 
 ### `lazyhog live`
@@ -183,7 +184,7 @@ ORDER BY count() DESC
 Configuration is stored in `~/.config/ph-tui.yaml`:
 
 ```yaml
-project_api_key: phc_xxxxx
+project_api_key: phx_xxxxx  # Must be Personal API key (phx_), not Project API key (phc_)
 instance_url: https://app.posthog.com
 poll_interval: 2  # seconds
 ```
@@ -238,6 +239,7 @@ Run `lazyhog login` to set up authentication first.
 
 ### API connection errors
 - Verify your API key is correct in `~/.config/ph-tui.yaml`
+- **Authentication error (401)**: You're likely using a Project API key (`phc_`) instead of a Personal API key (`phx_`). Run `lazyhog login` and use a Personal API key from PostHog → Settings → Personal API Keys
 - Check your internet connection
 - For self-hosted instances, verify the instance URL is accessible
 

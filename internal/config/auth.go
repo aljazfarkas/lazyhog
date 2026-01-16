@@ -13,9 +13,12 @@ func ValidateAPIKey(apiKey string) error {
 		return fmt.Errorf("API key cannot be empty")
 	}
 
-	// PostHog API keys are typically prefixed with phc_ or phx_
-	if !strings.HasPrefix(apiKey, "phc_") && !strings.HasPrefix(apiKey, "phx_") {
-		return fmt.Errorf("API key should start with 'phc_' or 'phx_'")
+	// PostHog Personal API keys are prefixed with phx_ (phc_ is for Project API keys which won't work here)
+	if !strings.HasPrefix(apiKey, "phx_") {
+		if strings.HasPrefix(apiKey, "phc_") {
+			return fmt.Errorf("Project API keys (phc_) cannot be used. You need a Personal API key (phx_) from Settings → Personal API Keys")
+		}
+		return fmt.Errorf("Personal API key should start with 'phx_'")
 	}
 
 	// Basic length check (PostHog keys are typically 40+ characters)
