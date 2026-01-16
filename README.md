@@ -1,0 +1,240 @@
+# lazyhog 🦔
+
+A blazing-fast Terminal User Interface for PostHog, built with Go and the Charm stack.
+
+## Features
+
+### 📡 Live Events Stream
+Stream events in real-time as they happen in your PostHog instance. Navigate with arrow keys, press Enter to expand JSON details, and see events update every 2 seconds.
+
+### 🚩 Feature Flags Manager
+View and toggle feature flags instantly. Use fuzzy search to find flags, Space to toggle them on/off, and see real-time status updates.
+
+### 👤 Person Lookup
+Look up any person by their distinct_id. View their properties in a scrollable panel alongside their recent events in a two-column layout.
+
+### 🔍 HogQL Console
+Execute HogQL queries directly from your terminal. View results in a dynamic table, export to CSV with Ctrl+S, and navigate query history with arrow keys.
+
+## Installation
+
+### From Source
+```bash
+git clone https://github.com/aljazfarkas/lazyhog
+cd lazyhog
+go build -o ph cmd/ph/*.go
+sudo mv ph /usr/local/bin/
+```
+
+### Using Go Install
+```bash
+go install github.com/aljazfarkas/lazyhog/cmd/ph@latest
+```
+
+## Quick Start
+
+### 1. Authenticate
+
+```bash
+# Interactive mode (recommended)
+ph login
+
+# Non-interactive mode
+ph login --api-key=phc_xxx --instance-url=https://app.posthog.com
+```
+
+Your API key can be found in PostHog → Settings → Project API Key.
+
+For self-hosted instances, provide your custom URL.
+
+Configuration is saved to `~/.config/ph-tui.yaml` with restricted permissions.
+
+### 2. Start using lazyhog
+
+```bash
+# Stream live events
+ph live
+
+# Manage feature flags
+ph flags
+
+# Look up a person
+ph person user@example.com
+
+# Open HogQL console
+ph query
+```
+
+## Commands
+
+### `ph login`
+Configure your PostHog API credentials.
+
+**Options:**
+- `--api-key` - PostHog project API key
+- `--instance-url` - PostHog instance URL (default: https://app.posthog.com)
+
+**Examples:**
+```bash
+# Interactive mode
+ph login
+
+# With flags
+ph login --api-key=phc_xxx
+```
+
+### `ph live`
+Stream events in real-time.
+
+**Keyboard shortcuts:**
+- `↑/↓` or `j/k` - Navigate events
+- `Enter` or `Space` - Expand/collapse event details
+- `r` - Refresh
+- `q` or `Ctrl+C` - Quit
+
+### `ph flags`
+View and manage feature flags.
+
+**Keyboard shortcuts:**
+- `↑/↓` or `j/k` - Navigate flags
+- `Space` - Toggle flag on/off
+- `/` - Enter search mode
+- `r` - Refresh
+- `Esc` - Exit search mode
+- `q` or `Ctrl+C` - Quit
+
+### `ph person [distinct_id]`
+Look up a person and their recent activity.
+
+**Keyboard shortcuts:**
+- `Tab` - Switch between properties and events columns
+- `↑/↓` or `j/k` - Scroll within active column
+- `r` - Refresh
+- `q` or `Ctrl+C` - Quit
+
+**Example:**
+```bash
+ph person user@example.com
+ph person 12345
+```
+
+### `ph query`
+Open the HogQL query console.
+
+**Keyboard shortcuts:**
+- `Ctrl+Enter` - Execute query
+- `↑/↓` - Navigate query history (in input mode)
+- `Arrow keys` - Scroll table (in result mode)
+- `Ctrl+S` - Export results to CSV
+- `Esc` - Return to query input
+- `Ctrl+C` - Quit
+
+**Example queries:**
+```sql
+-- Top events in the last day
+SELECT event, count() FROM events
+WHERE timestamp > now() - INTERVAL 1 DAY
+GROUP BY event
+ORDER BY count() DESC
+LIMIT 10
+
+-- Most active users
+SELECT distinct_id, count() as event_count
+FROM events
+GROUP BY distinct_id
+ORDER BY event_count DESC
+LIMIT 10
+
+-- Pageview paths
+SELECT properties.$current_url, count()
+FROM events
+WHERE event = '$pageview'
+GROUP BY properties.$current_url
+ORDER BY count() DESC
+```
+
+## Configuration
+
+Configuration is stored in `~/.config/ph-tui.yaml`:
+
+```yaml
+project_api_key: phc_xxxxx
+instance_url: https://app.posthog.com
+poll_interval: 2  # seconds
+```
+
+## Development
+
+### Prerequisites
+- Go 1.21 or later
+- Access to a PostHog instance
+
+### Building from source
+```bash
+git clone https://github.com/aljazfarkas/lazyhog
+cd lazyhog
+go mod download
+go build -o ph cmd/ph/*.go
+```
+
+### Running tests
+```bash
+go test ./...
+```
+
+### Project structure
+```
+lazyhog/
+├── cmd/ph/              # CLI commands
+├── internal/
+│   ├── client/          # PostHog API client
+│   ├── config/          # Configuration management
+│   ├── ui/              # Bubbletea UI components
+│   │   ├── live/        # Live events view
+│   │   ├── flags/       # Feature flags view
+│   │   ├── person/      # Person lookup view
+│   │   ├── query/       # HogQL console
+│   │   ├── components/  # Reusable UI components
+│   │   └── styles/      # Styling system
+│   └── utils/           # Utility functions
+```
+
+### Built with
+- [Cobra](https://github.com/spf13/cobra) - CLI framework
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
+- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Terminal styling
+- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components
+
+## Troubleshooting
+
+### "config file not found" error
+Run `ph login` to set up authentication first.
+
+### API connection errors
+- Verify your API key is correct in `~/.config/ph-tui.yaml`
+- Check your internet connection
+- For self-hosted instances, verify the instance URL is accessible
+
+### Events not showing
+- Check that events are being sent to your PostHog instance
+- Try refreshing with `r`
+- Verify your API key has the correct permissions
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- PostHog team for the amazing product and API
+- Charm team for the incredible TUI libraries

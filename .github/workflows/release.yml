@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          # Build for multiple platforms
+          GOOS=darwin GOARCH=amd64 go build -o ph-darwin-amd64 cmd/ph/*.go
+          GOOS=darwin GOARCH=arm64 go build -o ph-darwin-arm64 cmd/ph/*.go
+          GOOS=linux GOARCH=amd64 go build -o ph-linux-amd64 cmd/ph/*.go
+          GOOS=linux GOARCH=arm64 go build -o ph-linux-arm64 cmd/ph/*.go
+          GOOS=windows GOARCH=amd64 go build -o ph-windows-amd64.exe cmd/ph/*.go
+
+          # Create tarballs
+          tar czf ph-darwin-amd64.tar.gz ph-darwin-amd64
+          tar czf ph-darwin-arm64.tar.gz ph-darwin-arm64
+          tar czf ph-linux-amd64.tar.gz ph-linux-amd64
+          tar czf ph-linux-arm64.tar.gz ph-linux-arm64
+          zip ph-windows-amd64.zip ph-windows-amd64.exe
+
+      - name: Generate checksums
+        run: |
+          sha256sum ph-*.tar.gz ph-*.zip > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ph-*.tar.gz
+            ph-*.zip
+            checksums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
