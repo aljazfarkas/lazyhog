@@ -32,7 +32,14 @@ func (c *Client) GetRecentEvents(ctx context.Context, limit int) ([]Event, error
 		limit = 50
 	}
 
-	path := fmt.Sprintf("/api/projects/@current/events/?limit=%d&orderBy=-timestamp", limit)
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/events/?limit=%d&orderBy=-timestamp", c.getProjectPath(), limit)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
@@ -55,7 +62,14 @@ func (c *Client) GetRecentEvents(ctx context.Context, limit int) ([]Event, error
 
 // GetEvent fetches a single event by ID
 func (c *Client) GetEvent(ctx context.Context, eventID string) (*Event, error) {
-	path := fmt.Sprintf("/api/projects/@current/events/%s/", eventID)
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/events/%s/", c.getProjectPath(), eventID)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {

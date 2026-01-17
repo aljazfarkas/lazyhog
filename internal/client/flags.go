@@ -29,7 +29,14 @@ type FlagsResponse struct {
 
 // ListFlags fetches all feature flags
 func (c *Client) ListFlags(ctx context.Context) ([]FeatureFlag, error) {
-	path := "/api/projects/@current/feature_flags/"
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/feature_flags/", c.getProjectPath())
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
@@ -52,7 +59,14 @@ func (c *Client) ListFlags(ctx context.Context) ([]FeatureFlag, error) {
 
 // ToggleFlag updates a feature flag's active status
 func (c *Client) ToggleFlag(ctx context.Context, flagID int, active bool) error {
-	path := fmt.Sprintf("/api/projects/@current/feature_flags/%d/", flagID)
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/feature_flags/%d/", c.getProjectPath(), flagID)
 
 	data := map[string]interface{}{
 		"active": active,
@@ -69,7 +83,14 @@ func (c *Client) ToggleFlag(ctx context.Context, flagID int, active bool) error 
 
 // GetFlag fetches a single feature flag by ID
 func (c *Client) GetFlag(ctx context.Context, flagID int) (*FeatureFlag, error) {
-	path := fmt.Sprintf("/api/projects/@current/feature_flags/%d/", flagID)
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/feature_flags/%d/", c.getProjectPath(), flagID)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {

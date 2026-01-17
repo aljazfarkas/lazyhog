@@ -30,7 +30,14 @@ type HogQLQueryResponse struct {
 
 // ExecuteQuery executes a HogQL query
 func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, error) {
-	path := "/api/projects/@current/query/"
+	// Ensure project ID is initialized
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+
+	path := fmt.Sprintf("%s/query/", c.getProjectPath())
 
 	reqData := HogQLQueryRequest{
 		Query: query,

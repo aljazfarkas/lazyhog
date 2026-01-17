@@ -4,7 +4,8 @@
       "Bash(go mod init:*)",
       "Bash(grep:*)",
       "Bash(go build:*)",
-      "WebFetch(domain:posthog.com)"
+      "WebFetch(domain:posthog.com)",
+      "Bash(./lazyhog:*)"
     ]
   }
 }
