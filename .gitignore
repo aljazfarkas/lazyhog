@@ -41,3 +41,6 @@ ph-tui.yaml
 
 # Exported data
 *.csv
+
+# Claude
+.claude

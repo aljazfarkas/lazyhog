@@ -171,11 +171,22 @@ func (f FlagListItem) GetDistinctID() string {
 func (m Model) renderListView(width, height int) string {
 	var sb strings.Builder
 
-	// Title based on resource type
+	// Title based on resource type with auto-scroll indicator
 	title := m.selectedResource.String()
+	if m.selectedResource == ResourceEvents {
+		indicator := m.getAutoScrollIndicator()
+		title += " " + indicator
+	}
 	titleStyled := styles.TitleStyle.Render(title)
 	sb.WriteString(titleStyled)
 	sb.WriteString("\n\n")
+
+	// Search input overlay if active
+	if m.searchMode {
+		searchInput := m.renderSearchInput(m.searchQuery, width)
+		sb.WriteString(searchInput)
+		sb.WriteString("\n")
+	}
 
 	// Error state
 	if m.err != nil {

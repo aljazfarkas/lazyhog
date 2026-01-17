@@ -9,6 +9,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Record interaction for polling pause
 	m.recordInteraction()
 
+	// Global help toggle
+	if msg.String() == "?" {
+		m.showHelp = !m.showHelp
+		return m, nil
+	}
+
+	// Block other input when help is shown
+	if m.showHelp {
+		if msg.String() == "esc" {
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
 	// Global shortcuts
 	switch msg.String() {
 	case "ctrl+c":
@@ -89,13 +103,36 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePane2Keys handles keyboard input for Pane 2 (List View)
 func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Search mode takes priority
+	if m.searchMode {
+		return m.handleSearchKeys(msg)
+	}
+
 	switch msg.String() {
+	case "/":
+		m.searchMode = true
+		m.searchQuery = ""
+		return m, nil
+
+	case "G":
+		m.enableAutoScroll()
+		return m, nil
+
 	case "up", "k":
 		m.MoveListCursorUp()
+		// Disable auto-scroll if we move away from bottom
+		if m.autoScroll && !m.isAtBottomOfList() {
+			m.autoScroll = false
+		}
 		return m, nil
 
 	case "down", "j":
 		m.MoveListCursorDown()
+		// Re-enable auto-scroll if we reach bottom
+		if !m.autoScroll && m.isAtBottomOfList() {
+			m.autoScroll = true
+			m.newEventCount = 0
+		}
 		return m, nil
 
 	case "enter":
@@ -120,8 +157,58 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handlePane3Keys handles keyboard input for Pane 3 (Inspector)
 func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "up", "k", "down", "j":
-		// For future scrolling within inspector
+	case "esc":
+		m.MoveFocusLeft()
+		return m, nil
+
+	case "j", "down":
+		if m.inspectorScroll < m.inspectorMaxScroll {
+			m.inspectorScroll++
+		}
+		return m, nil
+
+	case "k", "up":
+		if m.inspectorScroll > 0 {
+			m.inspectorScroll--
+		}
+		return m, nil
+
+	case " ":
+		// Toggle fold at cursor
+		m.toggleJSONFoldAtCursor()
+		return m, nil
+
+	case "Z":
+		// Shift+Z: Fold all top-level keys
+		m.jsonFoldAll()
+		return m, nil
+
+	case "y":
+		// Copy raw JSON
+		if m.inspectorData != nil {
+			jsonStr, err := m.extractFullJSON()
+			if err == nil {
+				err = m.CopyToClipboard(jsonStr)
+				if err == nil {
+					m.showClipboardFeedback("Copied JSON")
+				} else {
+					m.showClipboardFeedback("Copy failed")
+				}
+			}
+		}
+		return m, nil
+
+	case "c":
+		// Copy ID
+		id := m.extractCopyableID()
+		if id != "" {
+			err := m.CopyToClipboard(id)
+			if err == nil {
+				m.showClipboardFeedback("Copied ID: " + id)
+			} else {
+				m.showClipboardFeedback("Copy failed")
+			}
+		}
 		return m, nil
 
 	case "p":

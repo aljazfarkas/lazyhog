@@ -2,6 +2,7 @@ package miller
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -43,6 +44,31 @@ type Model struct {
 	// Loading and error state
 	loading bool
 	err     error
+
+	// UI Mode State
+	showHelp    bool
+	searchMode  bool
+	searchQuery string
+
+	// Auto-scroll state (Pane2)
+	autoScroll      bool   // Whether auto-scroll is active
+	newEventCount   int    // Count of new events since scroll up
+	lastSeenEventID string // ID of last event when scroll detached
+
+	// Search/filter state
+	filteredItems []ListItem // Filtered list items (nil means no filter active)
+
+	// Inspector scroll state (Pane 3)
+	inspectorScroll    int // Vertical scroll offset
+	inspectorMaxScroll int // Maximum scroll value
+
+	// JSON folding state (Pane 3)
+	jsonFoldState map[string]bool // JSON path -> folded status
+	allFolded     bool            // All top-level keys folded
+
+	// Clipboard feedback
+	clipboardMsg  string    // Temporary message (2 second TTL)
+	clipboardTime time.Time // When clipboard message was set
 }
 
 // Messages
@@ -68,6 +94,13 @@ func New(c *client.Client) Model {
 		lastInteraction:  time.Now(),
 		lastPoll:         time.Now(),
 		loading:          true,
+		autoScroll:       true,
+		newEventCount:    0,
+		searchMode:       false,
+		searchQuery:      "",
+		jsonFoldState:    make(map[string]bool),
+		allFolded:        false,
+		filteredItems:    nil,
 	}
 }
 
@@ -158,6 +191,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickCmd()
 
 	case eventsMsg:
+		// Detect new events if paused
+		if !m.autoScroll && len(m.listItems) > 0 {
+			newCount := m.detectNewEvents(len(msg))
+			m.newEventCount += newCount
+		}
+
 		m.listItems = make([]ListItem, len(msg))
 		for i, event := range msg {
 			m.listItems[i] = EventListItem{Event: event}
@@ -165,12 +204,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 
-		// Adjust cursor if out of bounds
-		if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
+		// Auto-scroll: stay at bottom if enabled
+		if m.autoScroll && len(m.listItems) > 0 {
 			m.listCursor = len(m.listItems) - 1
-		}
-		if m.listCursor < 0 {
-			m.listCursor = 0
+			m.newEventCount = 0
+		} else {
+			// Adjust cursor if out of bounds
+			if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
+				m.listCursor = len(m.listItems) - 1
+			}
+			if m.listCursor < 0 {
+				m.listCursor = 0
+			}
 		}
 
 		return m, nil
@@ -234,6 +279,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if m.width == 0 {
 		return "Loading..."
+	}
+
+	// Overlay help if active
+	if m.showHelp {
+		return m.renderHelpOverlay(m.width, m.height)
 	}
 
 	var content string
@@ -360,13 +410,27 @@ func (m Model) renderBreadcrumb() string {
 func (m Model) renderFooter() string {
 	var help string
 
-	switch m.focus {
-	case FocusPane1:
-		help = "↑/↓: navigate • Enter: select • 1/2/3: quick select • Tab/l: next • q: quit"
-	case FocusPane2:
-		help = "↑/↓: navigate • Enter: details • p: pivot to person • r: refresh • Tab/l: next • h: back • q: quit"
-	case FocusPane3:
-		help = "p: pivot to person • h/Tab: navigate panes • q: back"
+	if m.showHelp {
+		help = "Press ? or Esc to close help"
+	} else if m.searchMode {
+		help = fmt.Sprintf("Search: %s | Enter: apply • Esc: cancel", m.searchQuery)
+	} else {
+		switch m.focus {
+		case FocusPane1:
+			help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/l: next • ?: help • q: quit"
+		case FocusPane2:
+			if m.selectedResource == ResourceEvents {
+				if m.autoScroll {
+					help = "↑/↓/j/k: navigate • G: jump bottom • /: search • Enter: details • ?: help • q: quit"
+				} else {
+					help = fmt.Sprintf("↑/↓/j/k: navigate • G: resume auto-scroll (%d new) • /: search • ?: help", m.newEventCount)
+				}
+			} else {
+				help = "↑/↓/j/k: navigate • /: search • Enter: details • ?: help • q: quit"
+			}
+		case FocusPane3:
+			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • Esc/h: back • ?: help"
+		}
 	}
 
 	return styles.FooterStyle.Width(m.width - 2).Render(styles.DimTextStyle.Render(help))
