@@ -29,6 +29,12 @@ type Model struct {
 	focus            Focus
 	selectedResource Resource
 
+	// Project selection state
+	availableProjects []client.Project
+	selectedProjectID int
+	pane1Cursor       int  // -1 = project, 0 = Events, 1 = Persons, 2 = Flags
+	projectsLoaded    bool
+
 	// List view (Pane 2)
 	listItems  []ListItem
 	listCursor int
@@ -76,6 +82,7 @@ type tickMsg time.Time
 type eventsMsg []client.Event
 type personsMsg []client.Person
 type flagsMsg []client.FeatureFlag
+type projectsMsg []client.Project
 type errorMsg struct{ err error }
 type pivotMsg struct {
 	person *client.Person
@@ -85,22 +92,25 @@ type pivotMsg struct {
 // New creates a new Miller Columns model
 func New(c *client.Client) Model {
 	return Model{
-		client:           c,
-		focus:            FocusPane1,
-		selectedResource: ResourceEvents,
-		listItems:        []ListItem{},
-		listCursor:       0,
-		isPolling:        true,
-		lastInteraction:  time.Now(),
-		lastPoll:         time.Now(),
-		loading:          true,
-		autoScroll:       true,
-		newEventCount:    0,
-		searchMode:       false,
-		searchQuery:      "",
-		jsonFoldState:    make(map[string]bool),
-		allFolded:        false,
-		filteredItems:    nil,
+		client:            c,
+		focus:             FocusPane1,
+		selectedResource:  ResourceEvents,
+		pane1Cursor:       0, // Start on Events
+		availableProjects: []client.Project{},
+		projectsLoaded:    false,
+		listItems:         []ListItem{},
+		listCursor:        0,
+		isPolling:         true,
+		lastInteraction:   time.Now(),
+		lastPoll:          time.Now(),
+		loading:           true,
+		autoScroll:        true,
+		newEventCount:     0,
+		searchMode:        false,
+		searchQuery:       "",
+		jsonFoldState:     make(map[string]bool),
+		allFolded:         false,
+		filteredItems:     nil,
 	}
 }
 
@@ -108,6 +118,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		tickCmd(),
 		m.fetchCurrentResource(),
+		fetchProjects(m.client),
 	)
 }
 
@@ -166,6 +177,19 @@ func fetchFlags(c *client.Client) tea.Cmd {
 			return errorMsg{err: err}
 		}
 		return flagsMsg(flags)
+	}
+}
+
+func fetchProjects(c *client.Client) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		projects, err := c.FetchProjects(ctx)
+		if err != nil {
+			return errorMsg{err: err}
+		}
+		return projectsMsg(projects)
 	}
 }
 
@@ -254,6 +278,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.listCursor = 0
 		}
 
+		return m, nil
+
+	case projectsMsg:
+		m.availableProjects = msg
+		m.projectsLoaded = true
+
+		// Set initial selected project
+		if len(msg) > 0 && m.selectedProjectID == 0 {
+			// Try to use client's project ID first
+			clientProjectID := m.client.GetProjectID()
+			if clientProjectID != 0 {
+				m.selectedProjectID = clientProjectID
+			} else {
+				// Fallback: use first available project
+				m.selectedProjectID = msg[0].ID
+				m.client.SetProjectID(msg[0].ID)
+			}
+		}
 		return m, nil
 
 	case pivotMsg:
@@ -417,19 +459,25 @@ func (m Model) renderFooter() string {
 	} else {
 		switch m.focus {
 		case FocusPane1:
-			help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/→: next • ?: help • q: quit"
+			if m.pane1Cursor == -1 {
+				// On project selector
+				help = "↑/↓/j/k: navigate • Enter: cycle project • ?: help • q: quit"
+			} else {
+				// On resource selector
+				help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/→/l: next • ?: help • q: quit"
+			}
 		case FocusPane2:
 			if m.selectedResource == ResourceEvents {
 				if m.autoScroll {
-					help = "↑/↓/j/k: navigate • G: jump bottom • /: search • Enter: details • ?: help • q: quit"
+					help = "↑/↓/j/k: navigate • G: jump bottom • /: search • Tab/→/l: details • ?: help • q: quit"
 				} else {
-					help = fmt.Sprintf("↑/↓/j/k: navigate • G: resume auto-scroll (%d new) • /: search • ?: help", m.newEventCount)
+					help = fmt.Sprintf("↑/↓/j/k: navigate • G: resume auto-scroll (%d new) • /: search • ?: help • q: quit", m.newEventCount)
 				}
 			} else {
-				help = "↑/↓/j/k: navigate • /: search • Enter: details • Tab/→: next • ←: back • ?: help"
+				help = "↑/↓/j/k: navigate • /: search • Tab/→/l: next • ←/h/Esc: back • ?: help • q: quit"
 			}
 		case FocusPane3:
-			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • Esc/h/←: back • ?: help"
+			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • ←/h/Esc: back • ?: help • q: quit"
 		}
 	}
 

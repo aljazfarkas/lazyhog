@@ -44,14 +44,65 @@ func (r Resource) Icon() string {
 	}
 }
 
+// renderProjectSection renders the project selector at the top of Pane 1
+func (m Model) renderProjectSection() string {
+	var sb strings.Builder
+
+	// Project header with icon
+	header := "📁 Project"
+	sb.WriteString(styles.DimTextStyle.Render(header))
+	sb.WriteString("\n")
+
+	// Project name (highlight if cursor is on project)
+	projectName := "Loading..."
+	if m.projectsLoaded {
+		if len(m.availableProjects) == 0 {
+			projectName = "No projects"
+		} else if m.selectedProjectID == 0 {
+			projectName = "No selection"
+		} else {
+			// Find current project name
+			for _, proj := range m.availableProjects {
+				if proj.ID == m.selectedProjectID {
+					projectName = proj.Name
+					break
+				}
+			}
+			// If still not found, show ID
+			if projectName == "Loading..." {
+				projectName = fmt.Sprintf("Project #%d", m.selectedProjectID)
+			}
+		}
+	}
+
+	// Highlight if cursor is on project (pane1Cursor == -1)
+	isSelected := (m.focus == FocusPane1 && m.pane1Cursor == -1)
+
+	if isSelected {
+		projectLine := styles.SelectedListItemStyle.Render("▶ " + projectName)
+		sb.WriteString(projectLine)
+	} else {
+		projectLine := styles.ListItemStyle.Render("  " + projectName)
+		sb.WriteString(projectLine)
+	}
+
+	return sb.String()
+}
+
 // renderResourceSelector renders Pane 1 (resource selector)
 func (m Model) renderResourceSelector(width, height int) string {
 	var sb strings.Builder
 
+	// Add project section at top
+	sb.WriteString(m.renderProjectSection())
+	sb.WriteString("\n\n") // Extra spacing between sections
+
+	// Resource rendering
 	resources := []Resource{ResourceEvents, ResourcePersons, ResourceFlags}
 
 	for i, resource := range resources {
-		selected := (resource == m.selectedResource)
+		// Check if THIS resource is selected based on cursor position
+		selected := (m.focus == FocusPane1 && m.pane1Cursor == i)
 
 		icon := resource.Icon()
 		label := resource.String()
@@ -90,18 +141,4 @@ func (m Model) renderResourceSelector(width, height int) string {
 		Render(sb.String())
 
 	return content
-}
-
-// MoveResourceSelectorUp moves the resource selection up
-func (m *Model) MoveResourceSelectorUp() {
-	if m.selectedResource > ResourceEvents {
-		m.selectedResource--
-	}
-}
-
-// MoveResourceSelectorDown moves the resource selection down
-func (m *Model) MoveResourceSelectorDown() {
-	if m.selectedResource < ResourceFlags {
-		m.selectedResource++
-	}
 }

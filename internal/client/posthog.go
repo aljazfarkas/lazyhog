@@ -8,11 +8,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/aljazfarkas/lazyhog/internal/config"
 )
+
+// Project represents a PostHog team/project
+type Project struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
 
 // Client is a PostHog API client wrapper
 type Client struct {
@@ -21,11 +29,14 @@ type Client struct {
 	httpClient  *http.Client
 	debug       bool
 	projectID   int
+	projects    []Project // Available projects for the user
+	debugLogger *log.Logger
+	debugFile   *os.File
 }
 
 // New creates a new PostHog API client
 func New(cfg *config.Config) *Client {
-	return &Client{
+	c := &Client{
 		apiKey:      cfg.ProjectAPIKey,
 		instanceURL: cfg.InstanceURL,
 		debug:       cfg.Debug,
@@ -33,6 +44,19 @@ func New(cfg *config.Config) *Client {
 			Timeout: 30 * time.Second,
 		},
 	}
+
+	// Initialize debug logging if enabled
+	if cfg.Debug {
+		logPath := filepath.Join(os.Getenv("HOME"), ".config", "lazyhog-debug.log")
+		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			c.debugFile = f
+			c.debugLogger = log.New(f, "", log.LstdFlags)
+			c.debugLogger.Println("=== Debug session started ===")
+		}
+	}
+
+	return c
 }
 
 // doRequest performs an HTTP request with authentication
@@ -55,41 +79,41 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 	req.Header.Set("Content-Type", "application/json")
 
-	if c.debug {
-		log.Printf("[DEBUG] Request: %s %s", method, url)
+	if c.debugLogger != nil {
+		c.debugLogger.Printf("[DEBUG] Request: %s %s", method, url)
 		maskedKey := "phx_****" + c.apiKey[len(c.apiKey)-4:]
-		log.Printf("[DEBUG] Authorization: Bearer %s", maskedKey)
+		c.debugLogger.Printf("[DEBUG] Authorization: Bearer %s", maskedKey)
 		if len(bodyBytes) > 0 {
-			log.Printf("[DEBUG] Request Body: %s", string(bodyBytes))
+			c.debugLogger.Printf("[DEBUG] Request Body: %s", string(bodyBytes))
 		}
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if c.debug {
-			log.Printf("[DEBUG] Request failed: %v", err)
+		if c.debugLogger != nil {
+			c.debugLogger.Printf("[DEBUG] Request failed: %v", err)
 		}
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	if c.debug {
-		log.Printf("[DEBUG] Response Status: %d %s", resp.StatusCode, resp.Status)
+	if c.debugLogger != nil {
+		c.debugLogger.Printf("[DEBUG] Response Status: %d %s", resp.StatusCode, resp.Status)
 	}
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		if c.debug {
-			log.Printf("[DEBUG] Response Body: %s", string(body))
+		if c.debugLogger != nil {
+			c.debugLogger.Printf("[DEBUG] Response Body: %s", string(body))
 		}
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	// For successful responses, log body in debug mode
-	if c.debug {
+	if c.debugLogger != nil {
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err == nil {
-			log.Printf("[DEBUG] Response Body: %s", string(bodyBytes))
+			c.debugLogger.Printf("[DEBUG] Response Body: %s", string(bodyBytes))
 			// Recreate the response body so it can be read again
 			resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
@@ -164,8 +188,8 @@ func (c *Client) InitializeProject(ctx context.Context) error {
 	}
 
 	c.projectID = userInfo.Team.ID
-	if c.debug {
-		log.Printf("[DEBUG] Project ID initialized: %d", c.projectID)
+	if c.debugLogger != nil {
+		c.debugLogger.Printf("[DEBUG] Project ID initialized: %d", c.projectID)
 	}
 
 	return nil
@@ -200,4 +224,50 @@ func (c *Client) getProjectPath() string {
 		return fmt.Sprintf("/api/projects/%d", c.projectID)
 	}
 	return "/api/projects/@current"
+}
+
+// FetchProjects retrieves all teams/projects the user has access to
+func (c *Client) FetchProjects(ctx context.Context) ([]Project, error) {
+	resp, err := c.get(ctx, "/api/users/@me/")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var userInfo struct {
+		Teams []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"teams"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		return nil, err
+	}
+
+	projects := make([]Project, len(userInfo.Teams))
+	for i, team := range userInfo.Teams {
+		projects[i] = Project{ID: team.ID, Name: team.Name}
+	}
+
+	c.projects = projects
+	return projects, nil
+}
+
+// SetProjectID changes the current project context
+func (c *Client) SetProjectID(projectID int) {
+	c.projectID = projectID
+}
+
+// GetProjects returns the cached projects list
+func (c *Client) GetProjects() []Project {
+	return c.projects
+}
+
+// Close closes the debug log file if open
+func (c *Client) Close() error {
+	if c.debugFile != nil {
+		return c.debugFile.Close()
+	}
+	return nil
 }

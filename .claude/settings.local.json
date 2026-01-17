@@ -7,7 +7,10 @@
       "WebFetch(domain:posthog.com)",
       "Bash(./lazyhog:*)",
       "WebSearch",
-      "Bash(go mod tidy:*)"
+      "Bash(go mod tidy:*)",
+      "Bash(find:*)",
+      "Bash(go mod graph:*)",
+      "Bash(go list:*)"
     ]
   }
 }

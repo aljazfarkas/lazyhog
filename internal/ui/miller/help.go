@@ -25,17 +25,17 @@ func (m Model) renderHelpOverlay(width, height int) string {
 			title: "Global",
 			items: [][]string{
 				{"?", "Toggle this help overlay"},
-				{"q", "Quit (from Resource Selector) or go back"},
+				{"q", "Quit app"},
 				{"Ctrl+C", "Force quit"},
-				{"Tab / →", "Move focus right"},
-				{"Shift+Tab / ←", "Move focus left"},
+				{"Tab / → / l", "Move focus right"},
+				{"Shift+Tab / ← / h / Esc", "Move focus left / Go back"},
 			},
 		},
 		{
 			title: "Resource Selector (Pane 1)",
 			items: [][]string{
-				{"↑/↓ or j/k", "Navigate resources"},
-				{"Enter", "Select resource"},
+				{"↑/↓ or j/k", "Navigate projects and resources"},
+				{"Enter", "Select resource (or cycle projects)"},
 				{"1", "Quick select Events"},
 				{"2", "Quick select Persons"},
 				{"3", "Quick select Flags"},
@@ -44,8 +44,7 @@ func (m Model) renderHelpOverlay(width, height int) string {
 		{
 			title: "List View (Pane 2)",
 			items: [][]string{
-				{"↑/↓ or j/k", "Navigate list"},
-				{"Enter", "View details in Inspector"},
+				{"↑/↓ or j/k", "Navigate list (auto-updates Inspector)"},
 				{"G", "Jump to bottom (resume auto-scroll)"},
 				{"/", "Search/filter (modal)"},
 				{"r", "Refresh current resource"},
@@ -61,7 +60,6 @@ func (m Model) renderHelpOverlay(width, height int) string {
 				{"y", "Copy full JSON to clipboard"},
 				{"c", "Copy ID to clipboard"},
 				{"p", "Pivot to person (Events only)"},
-				{"Esc / h / ←", "Go back to List View"},
 			},
 		},
 		{

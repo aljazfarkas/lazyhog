@@ -275,18 +275,20 @@ func (m Model) getEmptyStateMessage() string {
 	}
 }
 
-// MoveListCursorUp moves the list cursor up
+// MoveListCursorUp moves the list cursor up and updates inspector
 func (m *Model) MoveListCursorUp() {
 	if m.listCursor > 0 {
 		m.listCursor--
+		m.updateInspectorFromCursor()
 	}
 }
 
-// MoveListCursorDown moves the list cursor down
+// MoveListCursorDown moves the list cursor down and updates inspector
 func (m *Model) MoveListCursorDown() {
 	effectiveItems := m.getEffectiveListItems()
 	if m.listCursor < len(effectiveItems)-1 {
 		m.listCursor++
+		m.updateInspectorFromCursor()
 	}
 }
 
@@ -300,5 +302,17 @@ func (m *Model) SelectCurrentListItem() {
 	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
 	m.focus = FocusPane3
 	// Reset scroll when selecting new item
+	m.inspectorScroll = 0
+}
+
+// updateInspectorFromCursor updates inspector data based on current cursor position
+func (m *Model) updateInspectorFromCursor() {
+	effectiveItems := m.getEffectiveListItems()
+	if len(effectiveItems) == 0 || m.listCursor >= len(effectiveItems) {
+		return
+	}
+
+	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
+	// Reset scroll when updating item
 	m.inspectorScroll = 0
 }

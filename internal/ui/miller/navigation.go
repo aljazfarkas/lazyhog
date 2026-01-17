@@ -35,11 +35,34 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "q":
-		if m.focus == FocusPane1 {
-			return m, tea.Quit
+		// Always quit from any pane
+		return m, tea.Quit
+
+	case "esc":
+		// In help mode, close help
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
 		}
-		// From other panes, q moves focus left
+		// In search mode, cancel search
+		if m.searchMode {
+			m.searchMode = false
+			m.searchQuery = ""
+			m.filteredItems = nil
+			return m, nil
+		}
+		// Otherwise, go back (move focus left)
 		m.MoveFocusLeft()
+		return m, nil
+
+	case "h":
+		// Vim-style: move focus left (go back)
+		m.MoveFocusLeft()
+		return m, nil
+
+	case "l":
+		// Vim-style: move focus right (go forward)
+		m.MoveFocusRight()
 		return m, nil
 
 	case "tab", "right":
@@ -68,21 +91,28 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		m.MoveResourceSelectorUp()
+		m.MovePane1CursorUp()
 		return m, nil
 
 	case "down", "j":
-		m.MoveResourceSelectorDown()
+		m.MovePane1CursorDown()
 		return m, nil
 
 	case "enter":
-		// Switch resource and fetch data
+		// If on project (cursor = -1), cycle to next project
+		if m.pane1Cursor == -1 {
+			return m.handleProjectSwitch()
+		}
+
+		// If on resource, select it
+		m.selectedResource = Resource(m.pane1Cursor)
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
 		return m, m.fetchCurrentResource()
 
 	case "1":
+		m.pane1Cursor = 0
 		m.selectedResource = ResourceEvents
 		m.loading = true
 		m.listCursor = 0
@@ -90,6 +120,7 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.fetchCurrentResource()
 
 	case "2":
+		m.pane1Cursor = 1
 		m.selectedResource = ResourcePersons
 		m.loading = true
 		m.listCursor = 0
@@ -97,6 +128,7 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.fetchCurrentResource()
 
 	case "3":
+		m.pane1Cursor = 2
 		m.selectedResource = ResourceFlags
 		m.loading = true
 		m.listCursor = 0
@@ -138,10 +170,6 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "enter":
-		m.SelectCurrentListItem()
-		return m, nil
-
 	case "r":
 		m.loading = true
 		return m, m.fetchCurrentResource()
@@ -160,10 +188,6 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handlePane3Keys handles keyboard input for Pane 3 (Inspector)
 func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "h":
-		m.MoveFocusLeft()
-		return m, nil
-
 	case "j", "down":
 		if m.inspectorScroll < m.inspectorMaxScroll {
 			m.inspectorScroll++
@@ -223,4 +247,49 @@ func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// MovePane1CursorUp moves cursor up in Pane 1 (project + resources)
+func (m *Model) MovePane1CursorUp() {
+	if m.pane1Cursor > -1 {
+		m.pane1Cursor--
+	}
+}
+
+// MovePane1CursorDown moves cursor down in Pane 1 (project + resources)
+func (m *Model) MovePane1CursorDown() {
+	maxCursor := 2 // ResourceFlags
+	if m.pane1Cursor < maxCursor {
+		m.pane1Cursor++
+	}
+}
+
+// handleProjectSwitch handles Enter key on project selector
+func (m Model) handleProjectSwitch() (tea.Model, tea.Cmd) {
+	if !m.projectsLoaded || len(m.availableProjects) == 0 {
+		return m, nil
+	}
+
+	// Simple cycling: find current project index and move to next
+	currentIndex := -1
+	for i, proj := range m.availableProjects {
+		if proj.ID == m.selectedProjectID {
+			currentIndex = i
+			break
+		}
+	}
+
+	// Cycle to next project
+	nextIndex := (currentIndex + 1) % len(m.availableProjects)
+	m.selectedProjectID = m.availableProjects[nextIndex].ID
+
+	// Update client project ID
+	m.client.SetProjectID(m.selectedProjectID)
+
+	// Refetch current resource with new project
+	m.loading = true
+	m.listCursor = 0
+	m.inspectorData = nil
+
+	return m, m.fetchCurrentResource()
 }
