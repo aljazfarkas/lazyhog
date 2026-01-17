@@ -75,6 +75,10 @@ type Model struct {
 	// Clipboard feedback
 	clipboardMsg  string    // Temporary message (2 second TTL)
 	clipboardTime time.Time // When clipboard message was set
+
+	// Debounce state for Pane 1 resource selection
+	pendingResourceFetch *Resource // nil if no pending fetch
+	lastDebounceTime     time.Time // timestamp of last debounce
 }
 
 // Messages
@@ -92,25 +96,27 @@ type pivotMsg struct {
 // New creates a new Miller Columns model
 func New(c *client.Client) Model {
 	return Model{
-		client:            c,
-		focus:             FocusPane1,
-		selectedResource:  ResourceEvents,
-		pane1Cursor:       0, // Start on Events
-		availableProjects: []client.Project{},
-		projectsLoaded:    false,
-		listItems:         []ListItem{},
-		listCursor:        0,
-		isPolling:         true,
-		lastInteraction:   time.Now(),
-		lastPoll:          time.Now(),
-		loading:           true,
-		autoScroll:        true,
-		newEventCount:     0,
-		searchMode:        false,
-		searchQuery:       "",
-		jsonFoldState:     make(map[string]bool),
-		allFolded:         false,
-		filteredItems:     nil,
+		client:               c,
+		focus:                FocusPane1,
+		selectedResource:     ResourceEvents,
+		pane1Cursor:          0, // Start on Events
+		availableProjects:    []client.Project{},
+		projectsLoaded:       false,
+		listItems:            []ListItem{},
+		listCursor:           0,
+		isPolling:            true,
+		lastInteraction:      time.Now(),
+		lastPoll:             time.Now(),
+		loading:              true,
+		autoScroll:           true,
+		newEventCount:        0,
+		searchMode:           false,
+		searchQuery:          "",
+		jsonFoldState:        make(map[string]bool),
+		allFolded:            false,
+		filteredItems:        nil,
+		pendingResourceFetch: nil,
+		lastDebounceTime:     time.Time{},
 	}
 }
 
@@ -313,6 +319,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.loading = false
 		return m, nil
+
+	case debounceMsg:
+		// Only process if this debounce is still pending and matches current resource
+		if m.pendingResourceFetch != nil &&
+			*m.pendingResourceFetch == msg.resourceType &&
+			(msg.timestamp.Equal(m.lastDebounceTime) || msg.timestamp.After(m.lastDebounceTime)) {
+
+			// Clear pending state
+			m.pendingResourceFetch = nil
+			m.lastDebounceTime = msg.timestamp
+
+			// Trigger fetch
+			m.selectedResource = msg.resourceType
+			m.loading = true
+			m.listCursor = 0
+			m.inspectorData = nil
+			return m, m.fetchCurrentResource()
+		}
+		// Stale debounce, ignore
+		return m, nil
 	}
 
 	return m, nil
@@ -461,10 +487,10 @@ func (m Model) renderFooter() string {
 		case FocusPane1:
 			if m.pane1Cursor == -1 {
 				// On project selector
-				help = "↑/↓/j/k: navigate • Enter: cycle project • ?: help • q: quit"
+				help = "↑/↓/j/k: navigate • Enter: cycle project • Tab/→/l: next • ?: help • q: quit"
 			} else {
 				// On resource selector
-				help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/→/l: next • ?: help • q: quit"
+				help = "↑/↓/j/k: select resource • 1/2/3: quick select • Tab/→/l: next • ?: help • q: quit"
 			}
 		case FocusPane2:
 			if m.selectedResource == ResourceEvents {

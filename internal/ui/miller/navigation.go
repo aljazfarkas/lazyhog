@@ -1,6 +1,8 @@
 package miller
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -92,28 +94,42 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		m.MovePane1CursorUp()
+		// Auto-select resource with debounce if cursor moved to a resource
+		if m.pane1Cursor >= 0 {
+			resource := Resource(m.pane1Cursor)
+			m.pendingResourceFetch = &resource
+			m.lastDebounceTime = time.Now()
+			return m, startDebounce(resource)
+		}
+		// Clear pending fetch if moved to project row
+		m.pendingResourceFetch = nil
 		return m, nil
 
 	case "down", "j":
 		m.MovePane1CursorDown()
+		// Auto-select resource with debounce if cursor moved to a resource
+		if m.pane1Cursor >= 0 {
+			resource := Resource(m.pane1Cursor)
+			m.pendingResourceFetch = &resource
+			m.lastDebounceTime = time.Now()
+			return m, startDebounce(resource)
+		}
+		// Clear pending fetch if moved to project row
+		m.pendingResourceFetch = nil
 		return m, nil
 
 	case "enter":
-		// If on project (cursor = -1), cycle to next project
+		// Only handle project cycling
 		if m.pane1Cursor == -1 {
 			return m.handleProjectSwitch()
 		}
-
-		// If on resource, select it
-		m.selectedResource = Resource(m.pane1Cursor)
-		m.loading = true
-		m.listCursor = 0
-		m.inspectorData = nil
-		return m, m.fetchCurrentResource()
+		// No-op if on resource (auto-selection already happened)
+		return m, nil
 
 	case "1":
 		m.pane1Cursor = 0
 		m.selectedResource = ResourceEvents
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
@@ -122,6 +138,7 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "2":
 		m.pane1Cursor = 1
 		m.selectedResource = ResourcePersons
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
@@ -130,6 +147,7 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "3":
 		m.pane1Cursor = 2
 		m.selectedResource = ResourceFlags
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil

@@ -10,7 +10,8 @@
       "Bash(go mod tidy:*)",
       "Bash(find:*)",
       "Bash(go mod graph:*)",
-      "Bash(go list:*)"
+      "Bash(go list:*)",
+      "Bash(tree:*)"
     ]
   }
 }

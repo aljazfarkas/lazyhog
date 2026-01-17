@@ -34,8 +34,8 @@ func (m Model) renderHelpOverlay(width, height int) string {
 		{
 			title: "Resource Selector (Pane 1)",
 			items: [][]string{
-				{"↑/↓ or j/k", "Navigate projects and resources"},
-				{"Enter", "Select resource (or cycle projects)"},
+				{"↑/↓ or j/k", "Navigate and select resources"},
+				{"Enter", "Cycle to next project"},
 				{"1", "Quick select Events"},
 				{"2", "Quick select Persons"},
 				{"3", "Quick select Flags"},
