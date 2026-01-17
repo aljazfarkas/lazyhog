@@ -417,7 +417,7 @@ func (m Model) renderFooter() string {
 	} else {
 		switch m.focus {
 		case FocusPane1:
-			help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/l: next • ?: help • q: quit"
+			help = "↑/↓/j/k: navigate • Enter: select • 1/2/3: quick select • Tab/→: next • ?: help • q: quit"
 		case FocusPane2:
 			if m.selectedResource == ResourceEvents {
 				if m.autoScroll {
@@ -426,10 +426,10 @@ func (m Model) renderFooter() string {
 					help = fmt.Sprintf("↑/↓/j/k: navigate • G: resume auto-scroll (%d new) • /: search • ?: help", m.newEventCount)
 				}
 			} else {
-				help = "↑/↓/j/k: navigate • /: search • Enter: details • ?: help • q: quit"
+				help = "↑/↓/j/k: navigate • /: search • Enter: details • Tab/→: next • ←: back • ?: help"
 			}
 		case FocusPane3:
-			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • Esc/h: back • ?: help"
+			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • Esc/h/←: back • ?: help"
 		}
 	}
 

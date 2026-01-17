@@ -27,8 +27,8 @@ func (m Model) renderHelpOverlay(width, height int) string {
 				{"?", "Toggle this help overlay"},
 				{"q", "Quit (from Resource Selector) or go back"},
 				{"Ctrl+C", "Force quit"},
-				{"Tab / l", "Move focus right"},
-				{"Shift+Tab / h", "Move focus left"},
+				{"Tab / →", "Move focus right"},
+				{"Shift+Tab / ←", "Move focus left"},
 			},
 		},
 		{
@@ -61,7 +61,7 @@ func (m Model) renderHelpOverlay(width, height int) string {
 				{"y", "Copy full JSON to clipboard"},
 				{"c", "Copy ID to clipboard"},
 				{"p", "Pivot to person (Events only)"},
-				{"Esc", "Go back to List View"},
+				{"Esc / h / ←", "Go back to List View"},
 			},
 		},
 		{

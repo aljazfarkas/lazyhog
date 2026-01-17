@@ -6,7 +6,8 @@
       "Bash(go build:*)",
       "WebFetch(domain:posthog.com)",
       "Bash(./lazyhog:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(go mod tidy:*)"
     ]
   }
 }

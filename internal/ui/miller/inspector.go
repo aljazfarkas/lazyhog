@@ -3,6 +3,7 @@ package miller
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aljazfarkas/lazyhog/internal/client"
 	"github.com/aljazfarkas/lazyhog/internal/ui/components"
@@ -18,6 +19,12 @@ func (m Model) renderInspector(width, height int) string {
 	if m.inspectorData != nil {
 		title = "Details"
 	}
+
+	// Show clipboard feedback if recent (2 second TTL)
+	if !m.clipboardTime.IsZero() && time.Since(m.clipboardTime) < 2*time.Second {
+		title += " - " + m.clipboardMsg
+	}
+
 	titleStyled := styles.TitleStyle.Render(title)
 	sb.WriteString(titleStyled)
 	sb.WriteString("\n\n")
@@ -28,14 +35,14 @@ func (m Model) renderInspector(width, height int) string {
 		sb.WriteString(styles.DimTextStyle.Render(emptyMsg))
 		sb.WriteString("\n")
 	} else {
-		// Render based on resource type
+		// Render based on resource type with scrolling
 		switch m.selectedResource {
 		case ResourceEvents:
-			sb.WriteString(m.renderEventInspector(width, height))
+			sb.WriteString(m.renderEventInspectorScrollable(width, height))
 		case ResourcePersons:
-			sb.WriteString(m.renderPersonInspector(width, height))
+			sb.WriteString(m.renderPersonInspectorScrollable(width, height))
 		case ResourceFlags:
-			sb.WriteString(m.renderFlagInspector(width, height))
+			sb.WriteString(m.renderFlagInspectorScrollable(width, height))
 		}
 	}
 
@@ -193,3 +200,172 @@ func (m Model) renderFlagInspector(width, height int) string {
 
 	return sb.String()
 }
+
+// renderEventInspectorScrollable renders event details with scrolling support
+func (m Model) renderEventInspectorScrollable(width, height int) string {
+	event, ok := m.inspectorData.(client.Event)
+	if !ok {
+		return styles.ErrorTextStyle.Render("Error: Invalid event data")
+	}
+
+	var lines []string
+
+	// Event header
+	lines = append(lines, styles.JSONKeyStyle.Render("Event: ")+event.Event)
+	lines = append(lines, "")
+
+	// Basic info
+	lines = append(lines, styles.JSONKeyStyle.Render("Timestamp: ")+client.FormatEventTime(event.Timestamp))
+	lines = append(lines, styles.JSONKeyStyle.Render("Distinct ID: ")+event.DistinctID)
+
+	if event.UUID != "" {
+		lines = append(lines, styles.JSONKeyStyle.Render("Event ID: ")+event.UUID)
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, styles.JSONKeyStyle.Render("Properties:"))
+
+	// Add JSON properties with folding
+	jsonLines := m.renderFoldedJSON(event.Properties, m.inspectorScroll)
+	lines = append(lines, jsonLines...)
+
+	// Add hint for pivot
+	lines = append(lines, "")
+	lines = append(lines, styles.DimTextStyle.Render("Press 'p' to view this person"))
+
+	return m.renderScrollableContent(lines, height)
+}
+
+// renderPersonInspectorScrollable renders person details with scrolling support
+func (m Model) renderPersonInspectorScrollable(width, height int) string {
+	person, ok := m.inspectorData.(client.Person)
+	if !ok {
+		return styles.ErrorTextStyle.Render("Error: Invalid person data")
+	}
+
+	var lines []string
+
+	// Person header
+	nameValue := person.Name
+	if nameValue == "" {
+		nameValue = styles.DimTextStyle.Render("(no name)")
+	}
+	lines = append(lines, styles.JSONKeyStyle.Render("Name: ")+nameValue)
+	lines = append(lines, "")
+
+	// Distinct IDs
+	lines = append(lines, styles.JSONKeyStyle.Render("Distinct IDs:"))
+	for _, id := range person.DistinctIDs {
+		lines = append(lines, fmt.Sprintf("  • %s", id))
+	}
+	lines = append(lines, "")
+
+	if person.CreatedAt != "" {
+		lines = append(lines, styles.JSONKeyStyle.Render("Created: ")+person.CreatedAt)
+		lines = append(lines, "")
+	}
+
+	// Properties
+	lines = append(lines, styles.JSONKeyStyle.Render("Properties:"))
+
+	if len(person.Properties) == 0 {
+		lines = append(lines, styles.DimTextStyle.Render("  (no properties)"))
+	} else {
+		jsonLines := m.renderFoldedJSON(person.Properties, m.inspectorScroll)
+		lines = append(lines, jsonLines...)
+	}
+
+	return m.renderScrollableContent(lines, height)
+}
+
+// renderFlagInspectorScrollable renders feature flag details with scrolling support
+func (m Model) renderFlagInspectorScrollable(width, height int) string {
+	flag, ok := m.inspectorData.(client.FeatureFlag)
+	if !ok {
+		return styles.ErrorTextStyle.Render("Error: Invalid flag data")
+	}
+
+	var lines []string
+
+	// Flag header
+	lines = append(lines, styles.JSONKeyStyle.Render("Key: ")+flag.Key)
+	lines = append(lines, "")
+
+	nameValue := flag.Name
+	if nameValue == "" {
+		nameValue = styles.DimTextStyle.Render("(no name)")
+	}
+	lines = append(lines, styles.JSONKeyStyle.Render("Name: ")+nameValue)
+	lines = append(lines, "")
+
+	// Status
+	statusValue := styles.SuccessTextStyle.Render("Active")
+	if !flag.Active {
+		statusValue = styles.DimTextStyle.Render("Inactive")
+	}
+	lines = append(lines, styles.JSONKeyStyle.Render("Status: ")+statusValue)
+	lines = append(lines, "")
+
+	// Filters (if available)
+	if len(flag.Filters) > 0 {
+		lines = append(lines, styles.JSONKeyStyle.Render("Filters:"))
+		jsonLines := m.renderFoldedJSON(flag.Filters, m.inspectorScroll)
+		lines = append(lines, jsonLines...)
+		lines = append(lines, "")
+	}
+
+	// Created/modified dates if available
+	if flag.CreatedAt != "" {
+		lines = append(lines, styles.JSONKeyStyle.Render("Created: ")+flag.CreatedAt)
+	}
+
+	return m.renderScrollableContent(lines, height)
+}
+
+// renderScrollableContent applies scrolling to a slice of lines
+func (m Model) renderScrollableContent(lines []string, height int) string {
+	visibleHeight := height - 8
+	if visibleHeight < 5 {
+		visibleHeight = 5
+	}
+
+	// Calculate max scroll
+	m.inspectorMaxScroll = len(lines) - visibleHeight
+	if m.inspectorMaxScroll < 0 {
+		m.inspectorMaxScroll = 0
+	}
+
+	// Clamp scroll offset
+	scrollOffset := m.inspectorScroll
+	if scrollOffset > m.inspectorMaxScroll {
+		scrollOffset = m.inspectorMaxScroll
+	}
+	if scrollOffset < 0 {
+		scrollOffset = 0
+	}
+
+	// Calculate visible window
+	start := scrollOffset
+	end := start + visibleHeight
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	var sb strings.Builder
+
+	// Show scroll indicator if content overflows
+	if len(lines) > visibleHeight {
+		scrollIndicator := styles.DimTextStyle.Render(
+			fmt.Sprintf("[%d/%d]", scrollOffset+1, len(lines)))
+		sb.WriteString(scrollIndicator)
+		sb.WriteString("\n")
+	}
+
+	// Render visible lines
+	if start < len(lines) {
+		sb.WriteString(strings.Join(lines[start:end], "\n"))
+	}
+
+	return sb.String()
+}
+

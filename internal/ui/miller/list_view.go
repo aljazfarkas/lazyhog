@@ -194,37 +194,49 @@ func (m Model) renderListView(width, height int) string {
 		sb.WriteString("\n\n")
 		sb.WriteString(styles.DimTextStyle.Render("Press 'r' to retry"))
 		sb.WriteString("\n")
-	} else if len(m.listItems) == 0 {
-		// Empty state
-		emptyMsg := m.getEmptyStateMessage()
-		sb.WriteString(styles.DimTextStyle.Render(emptyMsg))
-		sb.WriteString("\n")
 	} else {
-		// Render list items with viewport management
-		visibleHeight := height - 8
-		if visibleHeight < 5 {
-			visibleHeight = 5
-		}
+		// Use effective list items (filtered or all)
+		effectiveItems := m.getEffectiveListItems()
 
-		start := m.listCursor - visibleHeight/2
-		if start < 0 {
-			start = 0
-		}
-		end := start + visibleHeight
-		if end > len(m.listItems) {
-			end = len(m.listItems)
-			start = end - visibleHeight
+		if len(effectiveItems) == 0 {
+			// Empty state or no search results
+			if m.filteredItems != nil {
+				sb.WriteString(styles.DimTextStyle.Render("No matches found"))
+			} else {
+				emptyMsg := m.getEmptyStateMessage()
+				sb.WriteString(styles.DimTextStyle.Render(emptyMsg))
+			}
+			sb.WriteString("\n")
+		} else {
+			// Render list items with viewport management
+			visibleHeight := height - 8
+			if m.searchMode {
+				visibleHeight -= 2 // Account for search input overlay
+			}
+			if visibleHeight < 5 {
+				visibleHeight = 5
+			}
+
+			start := m.listCursor - visibleHeight/2
 			if start < 0 {
 				start = 0
 			}
-		}
+			end := start + visibleHeight
+			if end > len(effectiveItems) {
+				end = len(effectiveItems)
+				start = end - visibleHeight
+				if start < 0 {
+					start = 0
+				}
+			}
 
-		for i := start; i < end; i++ {
-			item := m.listItems[i]
-			line := item.RenderLine(width-4, i == m.listCursor)
-			sb.WriteString(line)
-			if i < end-1 {
-				sb.WriteString("\n")
+			for i := start; i < end; i++ {
+				item := effectiveItems[i]
+				line := item.RenderLine(width-4, i == m.listCursor)
+				sb.WriteString(line)
+				if i < end-1 {
+					sb.WriteString("\n")
+				}
 			}
 		}
 	}
@@ -272,17 +284,21 @@ func (m *Model) MoveListCursorUp() {
 
 // MoveListCursorDown moves the list cursor down
 func (m *Model) MoveListCursorDown() {
-	if m.listCursor < len(m.listItems)-1 {
+	effectiveItems := m.getEffectiveListItems()
+	if m.listCursor < len(effectiveItems)-1 {
 		m.listCursor++
 	}
 }
 
 // SelectCurrentListItem populates Pane 3 with the selected item's data
 func (m *Model) SelectCurrentListItem() {
-	if len(m.listItems) == 0 || m.listCursor >= len(m.listItems) {
+	effectiveItems := m.getEffectiveListItems()
+	if len(effectiveItems) == 0 || m.listCursor >= len(effectiveItems) {
 		return
 	}
 
-	m.inspectorData = m.listItems[m.listCursor].GetInspectorData()
+	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
 	m.focus = FocusPane3
+	// Reset scroll when selecting new item
+	m.inspectorScroll = 0
 }

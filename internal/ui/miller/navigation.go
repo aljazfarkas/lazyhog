@@ -23,6 +23,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Check search mode BEFORE global navigation shortcuts
+	// This prevents "l", "h", and other keys from triggering navigation while typing search queries
+	if m.searchMode {
+		return m.handleSearchKeys(msg)
+	}
+
 	// Global shortcuts
 	switch msg.String() {
 	case "ctrl+c":
@@ -36,11 +42,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.MoveFocusLeft()
 		return m, nil
 
-	case "tab", "l":
+	case "tab", "right":
 		m.MoveFocusRight()
 		return m, nil
 
-	case "shift+tab", "h":
+	case "shift+tab", "left":
 		m.MoveFocusLeft()
 		return m, nil
 	}
@@ -103,10 +109,7 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handlePane2Keys handles keyboard input for Pane 2 (List View)
 func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Search mode takes priority
-	if m.searchMode {
-		return m.handleSearchKeys(msg)
-	}
+	// Search mode is now handled globally in handleKeyPress()
 
 	switch msg.String() {
 	case "/":
@@ -157,7 +160,7 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handlePane3Keys handles keyboard input for Pane 3 (Inspector)
 func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc":
+	case "esc", "h":
 		m.MoveFocusLeft()
 		return m, nil
 
