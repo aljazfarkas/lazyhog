@@ -235,18 +235,20 @@ func (c *Client) FetchProjects(ctx context.Context) ([]Project, error) {
 	defer resp.Body.Close()
 
 	var userInfo struct {
-		Teams []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		} `json:"teams"`
+		Organization struct {
+			Teams []struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+			} `json:"teams"`
+		} `json:"organization"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return nil, err
 	}
 
-	projects := make([]Project, len(userInfo.Teams))
-	for i, team := range userInfo.Teams {
+	projects := make([]Project, len(userInfo.Organization.Teams))
+	for i, team := range userInfo.Organization.Teams {
 		projects[i] = Project{ID: team.ID, Name: team.Name}
 	}
 
