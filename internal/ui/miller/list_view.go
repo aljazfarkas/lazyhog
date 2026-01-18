@@ -169,6 +169,12 @@ func (f FlagListItem) GetDistinctID() string {
 
 // renderListView renders Pane 2 (list view)
 func (m Model) renderListView(width, height int) string {
+	// Phase 4 - Use stream table if available
+	if m.streamTable != nil {
+		return m.renderListViewWithTable(width, height)
+	}
+
+	// Fallback to custom rendering (should not be reached in normal operation)
 	var sb strings.Builder
 
 	// Title based on resource type with auto-scroll indicator
@@ -252,6 +258,85 @@ func (m Model) renderListView(width, height int) string {
 	return content
 }
 
+// renderListViewWithTable renders Pane 2 using bubbles/table (Phase 4)
+func (m Model) renderListViewWithTable(width, height int) string {
+	var sb strings.Builder
+
+	// Header
+	resourceName := m.selectedResource.String()
+	header := fmt.Sprintf("%s %s", m.selectedResource.Icon(), resourceName)
+
+	if m.loading {
+		header += " (Loading...)"
+	}
+
+	sb.WriteString(styles.TitleStyle.Render(header))
+	sb.WriteString("\n")
+
+	// Search mode overlay
+	extraLines := 0
+	if m.searchMode {
+		searchPrompt := fmt.Sprintf("Search: %s_", m.searchQuery)
+		sb.WriteString(styles.HighlightTextStyle.Render(searchPrompt))
+		sb.WriteString("\n")
+		extraLines += 1
+	}
+
+	// Auto-scroll indicator for Events
+	if m.selectedResource == ResourceEvents && m.streamTable != nil && !m.streamTable.IsAutoScrollEnabled() && m.streamTable.GetNewCount() > 0 {
+		indicator := fmt.Sprintf("↓ %d new events (press G to scroll)", m.streamTable.GetNewCount())
+		sb.WriteString(styles.HighlightTextStyle.Render(indicator))
+		sb.WriteString("\n")
+		extraLines += 1
+	}
+
+	// Error message
+	if m.err != nil {
+		errorMsg := fmt.Sprintf("Error: %s", m.err.Error())
+		sb.WriteString(styles.ErrorTextStyle.Render(errorMsg))
+		sb.WriteString("\n")
+	} else {
+		// Render table
+		effectiveItems := m.getEffectiveListItems()
+
+		if len(effectiveItems) == 0 {
+			// Empty state or no search results
+			if m.filteredItems != nil {
+				sb.WriteString(styles.DimTextStyle.Render("No matches found"))
+			} else {
+				emptyMsg := m.getEmptyStateMessage()
+				sb.WriteString(styles.DimTextStyle.Render(emptyMsg))
+			}
+			sb.WriteString("\n")
+		} else {
+			// Adjust table height to account for header and extra content
+			// height - 2 for border, - 2 for padding, - 1 for title, - extraLines
+			tableHeight := height - 5 - extraLines
+			if tableHeight < 5 {
+				tableHeight = 5
+			}
+
+			// Resize table to fit available space
+			if m.streamTable != nil {
+				m.streamTable.SetSize(width-4, tableHeight)
+			}
+
+			// Use the table view
+			sb.WriteString(m.streamTable.View())
+		}
+	}
+
+	// Wrap in styled container
+	borderStyle := GetBorderStyle(m.focus, 1)
+	content := borderStyle.
+		Width(width - 2).
+		Height(height - 2).
+		Padding(1).
+		Render(sb.String())
+
+	return content
+}
+
 // getEmptyStateMessage returns the appropriate empty state message
 func (m Model) getEmptyStateMessage() string {
 	switch m.selectedResource {
@@ -301,8 +386,14 @@ func (m *Model) SelectCurrentListItem() {
 
 	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
 	m.focus = FocusPane3
-	// Reset scroll when selecting new item
-	m.inspectorScroll = 0
+
+	// Phase 5 - Update inspector viewport with new data
+	if m.inspector != nil {
+		m.inspector.SetContent(m.inspectorData, m.selectedResource)
+	} else {
+		// Reset scroll when selecting new item (legacy)
+		m.inspectorScroll = 0
+	}
 }
 
 // updateInspectorFromCursor updates inspector data based on current cursor position
@@ -313,6 +404,12 @@ func (m *Model) updateInspectorFromCursor() {
 	}
 
 	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
-	// Reset scroll when updating item
-	m.inspectorScroll = 0
+
+	// Phase 5 - Update inspector viewport with new data
+	if m.inspector != nil {
+		m.inspector.SetContent(m.inspectorData, m.selectedResource)
+	} else {
+		// Reset scroll when updating item (legacy)
+		m.inspectorScroll = 0
+	}
 }

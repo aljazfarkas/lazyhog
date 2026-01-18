@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,6 +15,11 @@ type Config struct {
 	InstanceURL   string `yaml:"instance_url"`
 	PollInterval  int    `yaml:"poll_interval"` // seconds
 	Debug         bool   `yaml:"-"`              // runtime only, not saved to file
+
+	// Phase 1 - Visual settings
+	Environment  string `yaml:"environment"`   // "dev" or "prod"
+	Theme        string `yaml:"theme"`         // "orange" or "blue"
+	UseNerdFonts bool   `yaml:"use_nerd_fonts"` // Enable Nerd Font icons
 }
 
 const (
@@ -64,6 +70,15 @@ func Load() (*Config, error) {
 		cfg.PollInterval = defaultPollTime
 	}
 
+	// Phase 1 - Visual defaults
+	if cfg.Theme == "" {
+		cfg.Theme = "orange" // Default to new orange theme
+	}
+	if cfg.Environment == "" {
+		cfg.Environment = cfg.DetectEnvironment()
+	}
+	// UseNerdFonts defaults to false (will be auto-detected at runtime)
+
 	return &cfg, nil
 }
 
@@ -104,4 +119,44 @@ func Exists() bool {
 
 	_, err = os.Stat(path)
 	return err == nil
+}
+
+// DetectEnvironment determines if this is a dev or prod environment (Phase 1)
+func (c *Config) DetectEnvironment() string {
+	// If explicitly set, use that
+	if c.Environment != "" {
+		return c.Environment
+	}
+
+	// Detect based on instance URL
+	if c.InstanceURL == "" {
+		return "dev"
+	}
+
+	url := strings.ToLower(c.InstanceURL)
+
+	// Production indicators
+	if strings.Contains(url, "app.posthog.com") {
+		return "prod"
+	}
+	if strings.Contains(url, "eu.posthog.com") {
+		return "prod"
+	}
+
+	// Development/localhost indicators
+	if strings.Contains(url, "localhost") {
+		return "dev"
+	}
+	if strings.Contains(url, "127.0.0.1") {
+		return "dev"
+	}
+	if strings.Contains(url, "dev.") {
+		return "dev"
+	}
+	if strings.Contains(url, "staging.") {
+		return "dev"
+	}
+
+	// Default to dev for safety (requires explicit confirmation for prod actions)
+	return "dev"
 }

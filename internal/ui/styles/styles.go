@@ -2,18 +2,11 @@ package styles
 
 import "github.com/charmbracelet/lipgloss"
 
-// PostHog brand colors
+// PostHog brand colors (now using Orange theme - Phase 1)
+// All color definitions are now in colors.go
 var (
-	ColorPrimary   = lipgloss.Color("#1D4AFF") // PostHog blue
-	ColorSecondary = lipgloss.Color("#9B59FF") // PostHog purple
-	ColorSuccess   = lipgloss.Color("#00FF00")
-	ColorError     = lipgloss.Color("#FF0000")
-	ColorWarning   = lipgloss.Color("#FFA500")
-	ColorInfo      = lipgloss.Color("#00FFFF")
-	ColorDim       = lipgloss.Color("#666666")
-	ColorDimmer    = lipgloss.Color("#444444")
-	ColorText      = lipgloss.Color("#FFFFFF")
-	ColorBorder    = lipgloss.Color("#333333")
+	ColorPrimary   = ColorOrange       // PostHog orange (new default)
+	ColorSecondary = ColorDeepCharcoal // Deep charcoal (new default)
 )
 
 // Common styles
@@ -96,25 +89,25 @@ var (
 	StatusInactiveStyle = lipgloss.NewStyle().
 				Foreground(ColorDim)
 
-	// JSON viewer
+	// JSON viewer (Phase 1 - Monokai-inspired syntax highlighting)
 	JSONKeyStyle = lipgloss.NewStyle().
-			Foreground(ColorSecondary).
+			Foreground(ColorBlue). // Cyan-blue for keys
 			Bold(true)
 
 	JSONValueStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+			Foreground(ColorGreen) // Lime green for values
 
 	JSONStringStyle = lipgloss.NewStyle().
-			Foreground(ColorInfo)
+			Foreground(ColorYellow) // Yellow for strings
 
 	JSONNumberStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00"))
+			Foreground(ColorPurple) // Purple for numbers
 
 	JSONBoolStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFA500"))
+			Foreground(ColorWarning) // Orange for booleans
 
 	JSONNullStyle = lipgloss.NewStyle().
-			Foreground(ColorDim)
+			Foreground(ColorDim) // Dim gray for null
 )
 
 // Helper functions
