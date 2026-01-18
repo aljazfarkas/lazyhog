@@ -80,32 +80,16 @@ func (t Toast) View() string {
 
 	switch t.Type {
 	case ToastSuccess:
-		style = lipgloss.NewStyle().
-			Foreground(styles.ColorSuccess).
-			Background(lipgloss.Color("#002200")).
-			Padding(0, 2).
-			Bold(true)
+		style = styles.ToastSuccessStyle
 		icon = "✓"
 	case ToastError:
-		style = lipgloss.NewStyle().
-			Foreground(styles.ColorError).
-			Background(lipgloss.Color("#220000")).
-			Padding(0, 2).
-			Bold(true)
+		style = styles.ToastErrorStyle
 		icon = "✗"
 	case ToastWarning:
-		style = lipgloss.NewStyle().
-			Foreground(styles.ColorWarning).
-			Background(lipgloss.Color("#222200")).
-			Padding(0, 2).
-			Bold(true)
+		style = styles.ToastWarningStyle
 		icon = "⚠"
 	case ToastInfo:
-		style = lipgloss.NewStyle().
-			Foreground(styles.ColorInfo).
-			Background(lipgloss.Color("#002222")).
-			Padding(0, 2).
-			Bold(true)
+		style = styles.ToastInfoStyle
 		icon = "ℹ"
 	}
 

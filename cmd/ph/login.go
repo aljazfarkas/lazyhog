@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/aljazfarkas/lazyhog/internal/config"
+	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -122,76 +122,51 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m loginModel) View() string {
 	if m.step == 2 {
-		successStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
-			Bold(true)
-
-		pathStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888888"))
-
 		configPath, _ := config.GetConfigPath()
 
 		return fmt.Sprintf("\n%s\n\n%s\n\n%s\n\n",
-			successStyle.Render("✓ Authentication configured successfully!"),
-			fmt.Sprintf("Configuration saved to: %s", pathStyle.Render(configPath)),
+			styles.LoginSuccessStyle.Render("✓ Authentication configured successfully!"),
+			fmt.Sprintf("Configuration saved to: %s", styles.CaptionStyle.Render(configPath)),
 			"Run 'lazyhog live' to start streaming events.",
 		)
 	}
 
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#1D4AFF")).
-		Bold(true).
-		MarginBottom(1)
-
-	promptStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFFFF"))
-
-	inputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FFFF"))
-
-	errorStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF0000"))
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888")).
-		MarginTop(1)
-
 	var sb strings.Builder
 
-	sb.WriteString(titleStyle.Render("PostHog Authentication Setup"))
+	sb.WriteString(styles.LoginTitleStyle.Render("PostHog Authentication Setup"))
 	sb.WriteString("\n\n")
 
 	if m.step == 0 {
-		sb.WriteString(promptStyle.Render("Enter your PostHog Personal API Key:"))
+		sb.WriteString(styles.LoginPromptStyle.Render("Enter your PostHog Personal API Key:"))
 		sb.WriteString("\n")
 		// Mask API key display
 		maskedKey := strings.Repeat("*", len(m.apiKey))
 		if len(m.apiKey) < 10 {
 			maskedKey = m.apiKey
 		}
-		sb.WriteString(inputStyle.Render("> " + maskedKey))
+		sb.WriteString(styles.LoginInputStyle.Render("> " + maskedKey))
 		sb.WriteString("\n")
 		if m.err != nil {
 			sb.WriteString("\n")
-			sb.WriteString(errorStyle.Render("✗ " + m.err.Error()))
+			sb.WriteString(styles.LoginErrorStyle.Render("✗ " + m.err.Error()))
 		}
 		sb.WriteString("\n")
-		sb.WriteString(helpStyle.Render("Find your API key in PostHog → Settings → Personal API Keys"))
+		sb.WriteString(styles.LoginHelpStyle.Render("Find your API key in PostHog → Settings → Personal API Keys"))
 		sb.WriteString("\n")
-		sb.WriteString(helpStyle.Render("Must start with phx_ (not phc_) • Press Enter to continue • Esc to cancel"))
+		sb.WriteString(styles.LoginHelpStyle.Render("Must start with phx_ (not phc_) • Press Enter to continue • Esc to cancel"))
 	} else if m.step == 1 {
-		sb.WriteString(promptStyle.Render("Enter your PostHog Instance URL:"))
+		sb.WriteString(styles.LoginPromptStyle.Render("Enter your PostHog Instance URL:"))
 		sb.WriteString("\n")
-		sb.WriteString(inputStyle.Render("> " + m.instanceURL))
+		sb.WriteString(styles.LoginInputStyle.Render("> " + m.instanceURL))
 		sb.WriteString("\n")
 		if m.err != nil {
 			sb.WriteString("\n")
-			sb.WriteString(errorStyle.Render("✗ " + m.err.Error()))
+			sb.WriteString(styles.LoginErrorStyle.Render("✗ " + m.err.Error()))
 		}
 		sb.WriteString("\n")
-		sb.WriteString(helpStyle.Render("Default: https://app.posthog.com (for PostHog Cloud)"))
+		sb.WriteString(styles.LoginHelpStyle.Render("Default: https://app.posthog.com (for PostHog Cloud)"))
 		sb.WriteString("\n")
-		sb.WriteString(helpStyle.Render("Press Enter to save • Esc to cancel"))
+		sb.WriteString(styles.LoginHelpStyle.Render("Press Enter to save • Esc to cancel"))
 	}
 
 	return "\n" + sb.String() + "\n"

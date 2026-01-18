@@ -49,7 +49,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// In search mode, cancel search
 		if m.searchMode {
 			m.searchMode = false
-			m.searchQuery = ""
+			m.searchInput.Blur()
+			m.searchInput.SetValue("")
 			m.filteredItems = nil
 			return m, nil
 		}
@@ -163,8 +164,7 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "/":
-		m.searchMode = true
-		m.searchQuery = ""
+		m.enterSearchMode()
 		return m, nil
 
 	case "G":
@@ -207,15 +207,19 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
-		if m.inspectorScroll < m.inspectorMaxScroll {
-			m.inspectorScroll++
-		}
+		m.inspectorViewport.LineDown(1)
 		return m, nil
 
 	case "k", "up":
-		if m.inspectorScroll > 0 {
-			m.inspectorScroll--
-		}
+		m.inspectorViewport.LineUp(1)
+		return m, nil
+
+	case "ctrl+d":
+		m.inspectorViewport.HalfPageDown()
+		return m, nil
+
+	case "ctrl+u":
+		m.inspectorViewport.HalfPageUp()
 		return m, nil
 
 	case " ":

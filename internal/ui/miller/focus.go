@@ -32,16 +32,17 @@ func (f Focus) String() string {
 func GetBorderStyle(currentFocus Focus, paneNumber int) lipgloss.Style {
 	focused := (int(currentFocus) == paneNumber)
 
-	style := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder())
+	base := lipgloss.NewStyle()
 
 	if focused {
-		style = style.BorderForeground(styles.ColorPrimary)
-	} else {
-		style = style.BorderForeground(styles.ColorBorder)
+		return base.
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(styles.ColorPrimaryBlue)
 	}
 
-	return style
+	return base.
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.ColorBorderSubtle)
 }
 
 // MoveFocusRight moves focus to the next pane (right)

@@ -226,14 +226,20 @@ func (m Model) renderEventInspectorScrollable(width, height int) string {
 	lines = append(lines, styles.JSONKeyStyle.Render("Properties:"))
 
 	// Add JSON properties with folding
-	jsonLines := m.renderFoldedJSON(event.Properties, m.inspectorScroll)
+	jsonLines := m.renderFoldedJSON(event.Properties, 0)
 	lines = append(lines, jsonLines...)
 
 	// Add hint for pivot
 	lines = append(lines, "")
 	lines = append(lines, styles.DimTextStyle.Render("Press 'p' to view this person"))
 
-	return m.renderScrollableContent(lines, height)
+	// Build full content and update viewport
+	content := strings.Join(lines, "\n")
+	m.inspectorViewport.Width = width - 4
+	m.inspectorViewport.Height = height - 8
+	m.inspectorViewport.SetContent(content)
+
+	return m.inspectorViewport.View()
 }
 
 // renderPersonInspectorScrollable renders person details with scrolling support
@@ -271,11 +277,17 @@ func (m Model) renderPersonInspectorScrollable(width, height int) string {
 	if len(person.Properties) == 0 {
 		lines = append(lines, styles.DimTextStyle.Render("  (no properties)"))
 	} else {
-		jsonLines := m.renderFoldedJSON(person.Properties, m.inspectorScroll)
+		jsonLines := m.renderFoldedJSON(person.Properties, 0)
 		lines = append(lines, jsonLines...)
 	}
 
-	return m.renderScrollableContent(lines, height)
+	// Build full content and update viewport
+	content := strings.Join(lines, "\n")
+	m.inspectorViewport.Width = width - 4
+	m.inspectorViewport.Height = height - 8
+	m.inspectorViewport.SetContent(content)
+
+	return m.inspectorViewport.View()
 }
 
 // renderFlagInspectorScrollable renders feature flag details with scrolling support
@@ -309,7 +321,7 @@ func (m Model) renderFlagInspectorScrollable(width, height int) string {
 	// Filters (if available)
 	if len(flag.Filters) > 0 {
 		lines = append(lines, styles.JSONKeyStyle.Render("Filters:"))
-		jsonLines := m.renderFoldedJSON(flag.Filters, m.inspectorScroll)
+		jsonLines := m.renderFoldedJSON(flag.Filters, 0)
 		lines = append(lines, jsonLines...)
 		lines = append(lines, "")
 	}
@@ -319,53 +331,13 @@ func (m Model) renderFlagInspectorScrollable(width, height int) string {
 		lines = append(lines, styles.JSONKeyStyle.Render("Created: ")+flag.CreatedAt)
 	}
 
-	return m.renderScrollableContent(lines, height)
+	// Build full content and update viewport
+	content := strings.Join(lines, "\n")
+	m.inspectorViewport.Width = width - 4
+	m.inspectorViewport.Height = height - 8
+	m.inspectorViewport.SetContent(content)
+
+	return m.inspectorViewport.View()
 }
 
-// renderScrollableContent applies scrolling to a slice of lines
-func (m Model) renderScrollableContent(lines []string, height int) string {
-	visibleHeight := height - 8
-	if visibleHeight < 5 {
-		visibleHeight = 5
-	}
-
-	// Calculate max scroll
-	m.inspectorMaxScroll = len(lines) - visibleHeight
-	if m.inspectorMaxScroll < 0 {
-		m.inspectorMaxScroll = 0
-	}
-
-	// Clamp scroll offset
-	scrollOffset := m.inspectorScroll
-	if scrollOffset > m.inspectorMaxScroll {
-		scrollOffset = m.inspectorMaxScroll
-	}
-	if scrollOffset < 0 {
-		scrollOffset = 0
-	}
-
-	// Calculate visible window
-	start := scrollOffset
-	end := start + visibleHeight
-	if end > len(lines) {
-		end = len(lines)
-	}
-
-	var sb strings.Builder
-
-	// Show scroll indicator if content overflows
-	if len(lines) > visibleHeight {
-		scrollIndicator := styles.DimTextStyle.Render(
-			fmt.Sprintf("[%d/%d]", scrollOffset+1, len(lines)))
-		sb.WriteString(scrollIndicator)
-		sb.WriteString("\n")
-	}
-
-	// Render visible lines
-	if start < len(lines) {
-		sb.WriteString(strings.Join(lines[start:end], "\n"))
-	}
-
-	return sb.String()
-}
 

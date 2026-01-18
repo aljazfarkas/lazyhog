@@ -4,24 +4,39 @@ import (
 	"strings"
 
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+// enterSearchMode initializes and activates search mode
+func (m *Model) enterSearchMode() {
+	m.searchMode = true
+	m.searchInput = textinput.New()
+	m.searchInput.Placeholder = "Search..."
+	m.searchInput.Prompt = "🔍 "
+	m.searchInput.PromptStyle = styles.SearchPromptStyle
+	m.searchInput.TextStyle = styles.SearchTextStyle
+	m.searchInput.Focus()
+}
+
 // handleSearchKeys handles keyboard input when in search mode
 func (m Model) handleSearchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg.String() {
 	case "esc":
 		// Cancel search and restore full list
 		m.searchMode = false
-		m.searchQuery = ""
+		m.searchInput.Blur()
 		m.filteredItems = nil
 		return m, nil
 
 	case "enter":
 		// Apply filter
-		if m.searchQuery != "" {
-			m.filteredItems = m.applyFilter(m.listItems, m.searchQuery)
+		query := m.searchInput.Value()
+		if query != "" {
+			m.filteredItems = m.applyFilter(m.listItems, query)
 			if len(m.filteredItems) > 0 {
 				m.listCursor = 0 // Jump to first result
 			}
@@ -29,28 +44,13 @@ func (m Model) handleSearchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.filteredItems = nil
 		}
 		m.searchMode = false
-		return m, nil
-
-	case "backspace":
-		// Remove last character
-		if len(m.searchQuery) > 0 {
-			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
-		}
-		return m, nil
-
-	case "ctrl+u":
-		// Clear entire query
-		m.searchQuery = ""
-		return m, nil
-
-	default:
-		// Add character to query
-		// Only add printable characters
-		if len(msg.String()) == 1 {
-			m.searchQuery += msg.String()
-		}
+		m.searchInput.Blur()
 		return m, nil
 	}
+
+	// Let textinput handle all other keys
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	return m, cmd
 }
 
 // applyFilter filters list items by substring match
@@ -75,23 +75,9 @@ func (m Model) applyFilter(items []ListItem, query string) []ListItem {
 }
 
 // renderSearchInput renders the search input modal overlay
-func (m Model) renderSearchInput(query string, width int) string {
-	prompt := "Search: "
-	cursor := "█" // Block cursor
-
-	var sb strings.Builder
-	sb.WriteString(prompt)
-	sb.WriteString(query)
-	sb.WriteString(cursor)
-
-	// Style the search input
-	searchStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorPrimary).
-		Background(lipgloss.Color("#1a1a1a")).
-		Padding(0, 1).
-		Bold(true)
-
-	return searchStyle.Render(sb.String())
+func (m Model) renderSearchInput(width int) string {
+	container := styles.SearchContainerStyle.Render(m.searchInput.View())
+	return lipgloss.Place(width, 1, lipgloss.Center, lipgloss.Center, container)
 }
 
 // getEffectiveListItems returns either filtered items or all items

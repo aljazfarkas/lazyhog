@@ -8,6 +8,9 @@ import (
 
 	"github.com/aljazfarkas/lazyhog/internal/client"
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -54,7 +57,7 @@ type Model struct {
 	// UI Mode State
 	showHelp    bool
 	searchMode  bool
-	searchQuery string
+	searchInput textinput.Model
 
 	// Auto-scroll state (Pane2)
 	autoScroll      bool   // Whether auto-scroll is active
@@ -63,10 +66,6 @@ type Model struct {
 
 	// Search/filter state
 	filteredItems []ListItem // Filtered list items (nil means no filter active)
-
-	// Inspector scroll state (Pane 3)
-	inspectorScroll    int // Vertical scroll offset
-	inspectorMaxScroll int // Maximum scroll value
 
 	// JSON folding state (Pane 3)
 	jsonFoldState map[string]bool // JSON path -> folded status
@@ -79,6 +78,10 @@ type Model struct {
 	// Debounce state for Pane 1 resource selection
 	pendingResourceFetch *Resource // nil if no pending fetch
 	lastDebounceTime     time.Time // timestamp of last debounce
+
+	// UI Components
+	spinner           spinner.Model
+	inspectorViewport viewport.Model
 }
 
 // Messages
@@ -95,6 +98,10 @@ type pivotMsg struct {
 
 // New creates a new Miller Columns model
 func New(c *client.Client) Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = styles.SpinnerStyle
+
 	return Model{
 		client:               c,
 		focus:                FocusPane1,
@@ -111,12 +118,13 @@ func New(c *client.Client) Model {
 		autoScroll:           true,
 		newEventCount:        0,
 		searchMode:           false,
-		searchQuery:          "",
 		jsonFoldState:        make(map[string]bool),
 		allFolded:            false,
 		filteredItems:        nil,
 		pendingResourceFetch: nil,
 		lastDebounceTime:     time.Time{},
+		spinner:              s,
+		inspectorViewport:    viewport.New(0, 0), // Will be sized on WindowSizeMsg
 	}
 }
 
@@ -125,6 +133,7 @@ func (m Model) Init() tea.Cmd {
 		tickCmd(),
 		m.fetchCurrentResource(),
 		fetchProjects(m.client),
+		m.spinner.Tick,
 	)
 }
 
@@ -341,7 +350,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m, nil
+	// Update spinner
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return m, cmd
 }
 
 func (m Model) View() string {
@@ -476,36 +488,78 @@ func (m Model) renderBreadcrumb() string {
 
 // renderFooter renders help footer with keyboard shortcuts
 func (m Model) renderFooter() string {
-	var help string
+	var shortcuts []string
 
 	if m.showHelp {
-		help = "Press ? or Esc to close help"
+		shortcuts = []string{
+			styles.KeyStyle.Render("?") + " close help",
+			styles.KeyStyle.Render("Esc") + " close help",
+		}
 	} else if m.searchMode {
-		help = fmt.Sprintf("Search: %s | Enter: apply • Esc: cancel", m.searchQuery)
+		shortcuts = []string{
+			"🔍 " + m.searchInput.Value(),
+			styles.KeyStyle.Render("Enter") + " apply",
+			styles.KeyStyle.Render("Esc") + " cancel",
+		}
 	} else {
+		// Common shortcuts
+		shortcuts = []string{
+			styles.KeyStyle.Render("?") + " help",
+			styles.KeyStyle.Render("q") + " quit",
+		}
+
+		// Context-specific shortcuts based on focus
 		switch m.focus {
 		case FocusPane1:
 			if m.pane1Cursor == -1 {
 				// On project selector
-				help = "↑/↓/j/k: navigate • Enter: cycle project • Tab/→/l: next • ?: help • q: quit"
+				shortcuts = append([]string{
+					styles.KeyStyle.Render("j/k") + " navigate",
+					styles.KeyStyle.Render("Enter") + " select",
+					styles.KeyStyle.Render("Tab") + " next",
+				}, shortcuts...)
 			} else {
 				// On resource selector
-				help = "↑/↓/j/k: select resource • 1/2/3: quick select • Tab/→/l: next • ?: help • q: quit"
+				shortcuts = append([]string{
+					styles.KeyStyle.Render("j/k") + " navigate",
+					styles.KeyStyle.Render("1/2/3") + " quick select",
+					styles.KeyStyle.Render("Tab") + " next",
+				}, shortcuts...)
 			}
 		case FocusPane2:
 			if m.selectedResource == ResourceEvents {
 				if m.autoScroll {
-					help = "↑/↓/j/k: navigate • G: jump bottom • /: search • Tab/→/l: details • ?: help • q: quit"
+					shortcuts = append([]string{
+						styles.KeyStyle.Render("j/k") + " navigate",
+						styles.KeyStyle.Render("G") + " jump bottom",
+						styles.KeyStyle.Render("/") + " search",
+						styles.KeyStyle.Render("Tab") + " details",
+					}, shortcuts...)
 				} else {
-					help = fmt.Sprintf("↑/↓/j/k: navigate • G: resume auto-scroll (%d new) • /: search • ?: help • q: quit", m.newEventCount)
+					shortcuts = append([]string{
+						styles.KeyStyle.Render("j/k") + " navigate",
+						styles.KeyStyle.Render("G") + fmt.Sprintf(" resume (%d new)", m.newEventCount),
+						styles.KeyStyle.Render("/") + " search",
+					}, shortcuts...)
 				}
 			} else {
-				help = "↑/↓/j/k: navigate • /: search • Tab/→/l: next • ←/h/Esc: back • ?: help • q: quit"
+				shortcuts = append([]string{
+					styles.KeyStyle.Render("j/k") + " navigate",
+					styles.KeyStyle.Render("/") + " search",
+					styles.KeyStyle.Render("Tab") + " next",
+					styles.KeyStyle.Render("Esc") + " back",
+				}, shortcuts...)
 			}
 		case FocusPane3:
-			help = "j/k: scroll • Space: fold • Shift+Z: fold all • y: copy JSON • c: copy ID • ←/h/Esc: back • ?: help • q: quit"
+			shortcuts = append([]string{
+				styles.KeyStyle.Render("j/k") + " scroll",
+				styles.KeyStyle.Render("Space") + " fold",
+				styles.KeyStyle.Render("y") + " copy",
+				styles.KeyStyle.Render("Esc") + " back",
+			}, shortcuts...)
 		}
 	}
 
-	return styles.FooterStyle.Width(m.width - 2).Render(styles.DimTextStyle.Render(help))
+	joined := strings.Join(shortcuts, " • ")
+	return styles.FooterStyle.Width(m.width - 2).Render(joined)
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/aljazfarkas/lazyhog/internal/client"
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ListItem represents an item that can be displayed in Pane 2
@@ -183,7 +184,7 @@ func (m Model) renderListView(width, height int) string {
 
 	// Search input overlay if active
 	if m.searchMode {
-		searchInput := m.renderSearchInput(m.searchQuery, width)
+		searchInput := m.renderSearchInput(width)
 		sb.WriteString(searchInput)
 		sb.WriteString("\n")
 	}
@@ -254,25 +255,49 @@ func (m Model) renderListView(width, height int) string {
 
 // getEmptyStateMessage returns the appropriate empty state message
 func (m Model) getEmptyStateMessage() string {
+	var icon, message, hint string
+
 	switch m.selectedResource {
 	case ResourceEvents:
+		icon = "📡"
+		message = "No events yet"
+		hint = "Events will appear here as they're captured by PostHog"
 		if m.loading {
-			return "Loading events..."
+			return lipgloss.JoinVertical(lipgloss.Left,
+				styles.H1Style.Render(icon),
+				m.spinner.View()+" Loading events...",
+			)
 		}
-		return "No events yet. Waiting for new events..."
 	case ResourcePersons:
+		icon = "👤"
+		message = "No persons found"
+		hint = "Persons are created when events are sent with distinct IDs"
 		if m.loading {
-			return "Loading persons..."
+			return lipgloss.JoinVertical(lipgloss.Left,
+				styles.H1Style.Render(icon),
+				m.spinner.View()+" Loading persons...",
+			)
 		}
-		return "No persons found."
 	case ResourceFlags:
+		icon = "🚩"
+		message = "No feature flags"
+		hint = "Create flags in PostHog to manage feature rollouts"
 		if m.loading {
-			return "Loading flags..."
+			return lipgloss.JoinVertical(lipgloss.Left,
+				styles.H1Style.Render(icon),
+				m.spinner.View()+" Loading flags...",
+			)
 		}
-		return "No feature flags. Create flags in PostHog."
 	default:
 		return "No data available."
 	}
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		styles.H1Style.Render(icon),
+		styles.H2Style.Render(message),
+		"",
+		styles.CaptionStyle.Render(hint),
+	)
 }
 
 // MoveListCursorUp moves the list cursor up and updates inspector
@@ -302,7 +327,7 @@ func (m *Model) SelectCurrentListItem() {
 	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
 	m.focus = FocusPane3
 	// Reset scroll when selecting new item
-	m.inspectorScroll = 0
+	m.inspectorViewport.GotoTop()
 }
 
 // updateInspectorFromCursor updates inspector data based on current cursor position
@@ -314,5 +339,5 @@ func (m *Model) updateInspectorFromCursor() {
 
 	m.inspectorData = effectiveItems[m.listCursor].GetInspectorData()
 	// Reset scroll when updating item
-	m.inspectorScroll = 0
+	m.inspectorViewport.GotoTop()
 }
