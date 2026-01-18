@@ -78,8 +78,8 @@ func runMillerColumns(cmd *cobra.Command, args []string) error {
 	// Ensure client resources are cleaned up
 	defer c.Close()
 
-	// Create and run the Miller Columns TUI (Phase 7 - pass config for environment detection)
-	m := miller.New(c, cfg)
+	// Create and run the Miller Columns TUI
+	m := miller.New(c)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {

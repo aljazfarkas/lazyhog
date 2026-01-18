@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aljazfarkas/lazyhog/internal/client"
-	"github.com/aljazfarkas/lazyhog/internal/config"
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,6 +32,7 @@ type Model struct {
 	// Project selection state
 	availableProjects []client.Project
 	selectedProjectID int
+	pane1Cursor       int  // -1 = project, 0 = Events, 1 = Persons, 2 = Flags
 	projectsLoaded    bool
 
 	// List view (Pane 2)
@@ -79,26 +79,6 @@ type Model struct {
 	// Debounce state for Pane 1 resource selection
 	pendingResourceFetch *Resource // nil if no pending fetch
 	lastDebounceTime     time.Time // timestamp of last debounce
-
-	// Phase 2 - Navigation enhancements
-	pane1Collapsed bool // Whether Pane 1 is in icon-only mode
-
-	// Phase 3 - Sidebar with bubbles/list
-	sidebar *SidebarModel // Sidebar list model
-
-	// Phase 4 - Stream table with bubbles/table
-	streamTable *StreamTableModel // Stream table model for Pane 2
-
-	// Phase 5 - Inspector with bubbles/viewport
-	inspector *InspectorModel // Inspector viewport model for Pane 3
-
-	// Phase 6 - Help system with bubbles/help
-	helpBubbles *HelpModel // Context-aware help model
-
-	// Phase 7 - Flag forms with huh
-	flagForm     *FlagFormModel // Flag toggle confirmation form
-	showFlagForm bool           // Whether flag form is visible
-	config       *config.Config // Config for environment detection
 }
 
 // Messages
@@ -114,24 +94,12 @@ type pivotMsg struct {
 }
 
 // New creates a new Miller Columns model
-func New(c *client.Client, cfg *config.Config) Model {
-	// Phase 3 - Create sidebar
-	sidebar := NewSidebarModel(20, 20, false) // Will be resized on first render
-	sidebar.SetSelectedIndex(1) // Start on Events (index 1, since project is index 0)
-
-	// Phase 4 - Create stream table
-	streamTable := NewStreamTableModel(50, 20, ResourceEvents) // Will be resized on first render
-
-	// Phase 5 - Create inspector viewport
-	inspector := NewInspectorModel(50, 20) // Will be resized on first render
-
-	// Phase 6 - Create help model
-	helpBubbles := NewHelpModel()
-
+func New(c *client.Client) Model {
 	return Model{
 		client:               c,
 		focus:                FocusPane1,
 		selectedResource:     ResourceEvents,
+		pane1Cursor:          0, // Start on Events
 		availableProjects:    []client.Project{},
 		projectsLoaded:       false,
 		listItems:            []ListItem{},
@@ -149,14 +117,6 @@ func New(c *client.Client, cfg *config.Config) Model {
 		filteredItems:        nil,
 		pendingResourceFetch: nil,
 		lastDebounceTime:     time.Time{},
-		pane1Collapsed:       false, // Phase 2 - Start expanded
-		sidebar:              &sidebar, // Phase 3 - Sidebar
-		streamTable:          &streamTable, // Phase 4 - Stream table
-		inspector:            &inspector, // Phase 5 - Inspector viewport
-		helpBubbles:          &helpBubbles, // Phase 6 - Help system
-		flagForm:             nil, // Phase 7 - Flag form (created on demand)
-		showFlagForm:         false, // Phase 7 - Flag form visibility
-		config:               cfg, // Phase 7 - Config for environment detection
 	}
 }
 
@@ -240,83 +200,10 @@ func fetchProjects(c *client.Client) tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Phase 3 - Update sidebar if focused on Pane 1
-	if m.focus == FocusPane1 && m.sidebar != nil {
-		var cmd tea.Cmd
-		*m.sidebar, cmd = m.sidebar.Update(msg)
-
-		// Derive selectedResource from sidebar
-		if item, ok := m.sidebar.GetSelectedItem(); ok && !item.isProject {
-			m.selectedResource = item.resource
-		}
-
-		// Trigger debounce if arrow key was pressed
-		debounceCmd := m.deriveResourceAndDebounce(msg)
-
-		if cmd != nil && debounceCmd != nil {
-			return m, tea.Batch(cmd, debounceCmd)
-		} else if cmd != nil {
-			return m, cmd
-		} else if debounceCmd != nil {
-			return m, debounceCmd
-		}
-	}
-
-	// Phase 4 - Update stream table if focused on Pane 2
-	if m.focus == FocusPane2 && m.streamTable != nil {
-		var cmd tea.Cmd
-		*m.streamTable, cmd = m.streamTable.Update(msg)
-
-		// Sync table cursor with model state
-		m.listCursor = m.streamTable.GetCursor()
-
-		// Update inspector from table selection
-		if item := m.streamTable.GetSelectedItem(); item != nil {
-			m.inspectorData = item.GetInspectorData()
-			// Phase 5 - Update inspector viewport with new data
-			if m.inspector != nil {
-				m.inspector.SetContent(m.inspectorData, m.selectedResource)
-			}
-		}
-
-		if cmd != nil {
-			return m, cmd
-		}
-	}
-
-	// Phase 5 - Update inspector viewport if focused on Pane 3
-	if m.focus == FocusPane3 && m.inspector != nil {
-		var cmd tea.Cmd
-		*m.inspector, cmd = m.inspector.Update(msg)
-
-		if cmd != nil {
-			return m, cmd
-		}
-	}
-
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-
-		// Phase 3 - Resize sidebar
-		if m.sidebar != nil {
-			pane1Width, _, _ := m.calculatePaneWidths()
-			m.sidebar.SetSize(pane1Width-2, m.height-5) // Adjust for borders and padding
-		}
-
-		// Phase 4 - Resize stream table
-		if m.streamTable != nil {
-			_, pane2Width, _ := m.calculatePaneWidths()
-			m.streamTable.SetSize(pane2Width-4, m.height-8) // Adjust for borders and padding
-		}
-
-		// Phase 5 - Resize inspector viewport
-		if m.inspector != nil {
-			_, _, pane3Width := m.calculatePaneWidths()
-			m.inspector.SetSize(pane3Width-4, m.height-8) // Adjust for borders and padding
-		}
-
 		return m, nil
 
 	case tea.KeyMsg:
@@ -347,27 +234,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 
-		// Phase 4 - Update stream table with items
-		if m.streamTable != nil {
-			m.streamTable.SetItems(m.listItems, ResourceEvents)
-			m.listCursor = m.streamTable.GetCursor()
-
-			// Sync auto-scroll state
-			m.autoScroll = m.streamTable.IsAutoScrollEnabled()
-			m.newEventCount = m.streamTable.GetNewCount()
+		// Auto-scroll: stay at bottom if enabled
+		if m.autoScroll && len(m.listItems) > 0 {
+			m.listCursor = len(m.listItems) - 1
+			m.newEventCount = 0
 		} else {
-			// Fallback to old auto-scroll logic
-			if m.autoScroll && len(m.listItems) > 0 {
+			// Adjust cursor if out of bounds
+			if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
 				m.listCursor = len(m.listItems) - 1
-				m.newEventCount = 0
-			} else {
-				// Adjust cursor if out of bounds
-				if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
-					m.listCursor = len(m.listItems) - 1
-				}
-				if m.listCursor < 0 {
-					m.listCursor = 0
-				}
+			}
+			if m.listCursor < 0 {
+				m.listCursor = 0
 			}
 		}
 
@@ -381,18 +258,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 
-		// Phase 4 - Update stream table with items
-		if m.streamTable != nil {
-			m.streamTable.SetItems(m.listItems, ResourcePersons)
-			m.listCursor = m.streamTable.GetCursor()
-		} else {
-			// Adjust cursor if out of bounds
-			if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
-				m.listCursor = len(m.listItems) - 1
-			}
-			if m.listCursor < 0 {
-				m.listCursor = 0
-			}
+		// Adjust cursor if out of bounds
+		if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
+			m.listCursor = len(m.listItems) - 1
+		}
+		if m.listCursor < 0 {
+			m.listCursor = 0
 		}
 
 		return m, nil
@@ -405,18 +276,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = nil
 
-		// Phase 4 - Update stream table with items
-		if m.streamTable != nil {
-			m.streamTable.SetItems(m.listItems, ResourceFlags)
-			m.listCursor = m.streamTable.GetCursor()
-		} else {
-			// Adjust cursor if out of bounds
-			if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
-				m.listCursor = len(m.listItems) - 1
-			}
-			if m.listCursor < 0 {
-				m.listCursor = 0
-			}
+		// Adjust cursor if out of bounds
+		if m.listCursor >= len(m.listItems) && len(m.listItems) > 0 {
+			m.listCursor = len(m.listItems) - 1
+		}
+		if m.listCursor < 0 {
+			m.listCursor = 0
 		}
 
 		return m, nil
@@ -437,27 +302,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.client.SetProjectID(msg[0].ID)
 			}
 		}
-
-		// Phase 3 - Update sidebar project name
-		if m.sidebar != nil && len(msg) > 0 {
-			for _, proj := range msg {
-				if proj.ID == m.selectedProjectID {
-					m.sidebar.UpdateProjectName(proj.Name)
-					break
-				}
-			}
-		}
-
 		return m, nil
 
 	case pivotMsg:
+		// Switch to Persons view after pivot
 		m.selectedResource = ResourcePersons
-
-		// Set sidebar to Persons (index 2)
-		if m.sidebar != nil {
-			m.sidebar.SetSelectedIndex(2)
-		}
-
 		m.listItems = []ListItem{PersonListItem{Person: *msg.person}}
 		m.listCursor = 0
 		m.inspectorData = *msg.person
@@ -472,17 +321,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case debounceMsg:
+		// Only process if this debounce is still pending and matches current resource
 		if m.pendingResourceFetch != nil &&
 			*m.pendingResourceFetch == msg.resourceType &&
 			(msg.timestamp.Equal(m.lastDebounceTime) || msg.timestamp.After(m.lastDebounceTime)) {
 
+			// Clear pending state
 			m.pendingResourceFetch = nil
+			m.lastDebounceTime = msg.timestamp
+
+			// Trigger fetch
 			m.selectedResource = msg.resourceType
 			m.loading = true
 			m.listCursor = 0
 			m.inspectorData = nil
 			return m, m.fetchCurrentResource()
 		}
+		// Stale debounce, ignore
 		return m, nil
 	}
 
@@ -540,26 +395,16 @@ func (m Model) calculatePaneWidths() (int, int, int) {
 		}
 	}
 
-	// Phase 2 - Adjust widths if Pane 1 is collapsed
-	var pane1Width int
-	if m.pane1Collapsed {
-		// Icon-only mode: minimal width for icons
-		pane1Width = 10
-	} else {
-		// Standard width: 15%
-		pane1Width = totalWidth * 15 / 100
-		// Ensure minimum width
-		if pane1Width < 20 {
-			pane1Width = 20
-		}
-	}
-
-	// Distribute remaining width between Pane 2 and Pane 3
-	remainingWidth := totalWidth - pane1Width
-	pane2Width := remainingWidth * 40 / 100 // 40% of remaining
+	// Standard 3-pane layout
+	// Pane 1: 15% | Pane 2: 35% | Pane 3: 50%
+	pane1Width := totalWidth * 15 / 100
+	pane2Width := totalWidth * 35 / 100
 	pane3Width := totalWidth - pane1Width - pane2Width
 
-	// Ensure minimum widths for Pane 2 and Pane 3
+	// Ensure minimum widths
+	if pane1Width < 20 {
+		pane1Width = 20
+	}
 	if pane2Width < 30 {
 		pane2Width = 30
 	}
@@ -640,9 +485,11 @@ func (m Model) renderFooter() string {
 	} else {
 		switch m.focus {
 		case FocusPane1:
-			if item, ok := m.sidebar.GetSelectedItem(); ok && item.isProject {
+			if m.pane1Cursor == -1 {
+				// On project selector
 				help = "↑/↓/j/k: navigate • Enter: cycle project • Tab/→/l: next • ?: help • q: quit"
 			} else {
+				// On resource selector
 				help = "↑/↓/j/k: select resource • 1/2/3: quick select • Tab/→/l: next • ?: help • q: quit"
 			}
 		case FocusPane2:
@@ -661,30 +508,4 @@ func (m Model) renderFooter() string {
 	}
 
 	return styles.FooterStyle.Width(m.width - 2).Render(styles.DimTextStyle.Render(help))
-}
-
-// deriveResourceAndDebounce triggers debounce after arrow key navigation
-func (m *Model) deriveResourceAndDebounce(msg tea.Msg) tea.Cmd {
-	if m.sidebar == nil {
-		return nil
-	}
-
-	// Check if this was a navigation key
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "up", "k", "down", "j":
-			// Sidebar just moved, derive resource and debounce
-			if item, ok := m.sidebar.GetSelectedItem(); ok && !item.isProject {
-				resource := item.resource
-				m.pendingResourceFetch = &resource
-				m.lastDebounceTime = time.Now()
-				return startDebounce(resource)
-			} else {
-				// On project row, clear pending fetch
-				m.pendingResourceFetch = nil
-			}
-		}
-	}
-
-	return nil
 }

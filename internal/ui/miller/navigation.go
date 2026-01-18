@@ -1,6 +1,8 @@
 package miller
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -72,36 +74,6 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left":
 		m.MoveFocusLeft()
 		return m, nil
-
-	// Phase 2 - New navigation shortcuts
-	case "b":
-		// Toggle sidebar collapse (icons-only mode)
-		m.TogglePane1Collapse()
-		return m, nil
-
-	case "1":
-		// Jump to Pane 1 (unless already in Pane 1, where it selects Events resource)
-		if m.focus != FocusPane1 {
-			m.JumpToPane(FocusPane1)
-			return m, nil
-		}
-		// Fall through to pane-specific handling for resource selection
-
-	case "2":
-		// Jump to Pane 2 (unless in Pane 1, where it selects Persons resource)
-		if m.focus != FocusPane1 {
-			m.JumpToPane(FocusPane2)
-			return m, nil
-		}
-		// Fall through to pane-specific handling for resource selection
-
-	case "3":
-		// Jump to Pane 3 (unless in Pane 1, where it selects Flags resource)
-		if m.focus != FocusPane1 {
-			m.JumpToPane(FocusPane3)
-			return m, nil
-		}
-		// Fall through to pane-specific handling for resource selection
 	}
 
 	// Pane-specific shortcuts
@@ -120,41 +92,62 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handlePane1Keys handles keyboard input for Pane 1 (Resource Selector)
 func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "up", "k":
+		m.MovePane1CursorUp()
+		// Auto-select resource with debounce if cursor moved to a resource
+		if m.pane1Cursor >= 0 {
+			resource := Resource(m.pane1Cursor)
+			m.pendingResourceFetch = &resource
+			m.lastDebounceTime = time.Now()
+			return m, startDebounce(resource)
+		}
+		// Clear pending fetch if moved to project row
+		m.pendingResourceFetch = nil
+		return m, nil
+
+	case "down", "j":
+		m.MovePane1CursorDown()
+		// Auto-select resource with debounce if cursor moved to a resource
+		if m.pane1Cursor >= 0 {
+			resource := Resource(m.pane1Cursor)
+			m.pendingResourceFetch = &resource
+			m.lastDebounceTime = time.Now()
+			return m, startDebounce(resource)
+		}
+		// Clear pending fetch if moved to project row
+		m.pendingResourceFetch = nil
+		return m, nil
+
 	case "enter":
 		// Only handle project cycling
-		if item, ok := m.sidebar.GetSelectedItem(); ok && item.isProject {
+		if m.pane1Cursor == -1 {
 			return m.handleProjectSwitch()
 		}
+		// No-op if on resource (auto-selection already happened)
 		return m, nil
 
 	case "1":
+		m.pane1Cursor = 0
 		m.selectedResource = ResourceEvents
-		if m.sidebar != nil {
-			m.sidebar.SetSelectedIndex(1) // Events
-		}
-		m.pendingResourceFetch = nil
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
 		return m, m.fetchCurrentResource()
 
 	case "2":
+		m.pane1Cursor = 1
 		m.selectedResource = ResourcePersons
-		if m.sidebar != nil {
-			m.sidebar.SetSelectedIndex(2) // Persons
-		}
-		m.pendingResourceFetch = nil
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
 		return m, m.fetchCurrentResource()
 
 	case "3":
+		m.pane1Cursor = 2
 		m.selectedResource = ResourceFlags
-		if m.sidebar != nil {
-			m.sidebar.SetSelectedIndex(3) // Flags
-		}
-		m.pendingResourceFetch = nil
+		m.pendingResourceFetch = nil // Cancel any pending debounce
 		m.loading = true
 		m.listCursor = 0
 		m.inspectorData = nil
@@ -175,45 +168,23 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "G":
-		// Phase 4 - Use stream table for auto-scroll
-		if m.streamTable != nil {
-			m.streamTable.EnableAutoScroll()
-			m.autoScroll = true
-			m.newEventCount = 0
-		} else {
-			m.enableAutoScroll()
-		}
+		m.enableAutoScroll()
 		return m, nil
 
 	case "up", "k":
-		// Phase 4 - Use stream table for cursor movement
-		if m.streamTable != nil {
-			m.streamTable.MoveUp()
-			m.listCursor = m.streamTable.GetCursor()
-			m.autoScroll = m.streamTable.IsAutoScrollEnabled()
-		} else {
-			m.MoveListCursorUp()
-			// Disable auto-scroll if we move away from bottom
-			if m.autoScroll && !m.isAtBottomOfList() {
-				m.autoScroll = false
-			}
+		m.MoveListCursorUp()
+		// Disable auto-scroll if we move away from bottom
+		if m.autoScroll && !m.isAtBottomOfList() {
+			m.autoScroll = false
 		}
 		return m, nil
 
 	case "down", "j":
-		// Phase 4 - Use stream table for cursor movement
-		if m.streamTable != nil {
-			m.streamTable.MoveDown()
-			m.listCursor = m.streamTable.GetCursor()
-			m.autoScroll = m.streamTable.IsAutoScrollEnabled()
-			m.newEventCount = m.streamTable.GetNewCount()
-		} else {
-			m.MoveListCursorDown()
-			// Re-enable auto-scroll if we reach bottom
-			if !m.autoScroll && m.isAtBottomOfList() {
-				m.autoScroll = true
-				m.newEventCount = 0
-			}
+		m.MoveListCursorDown()
+		// Re-enable auto-scroll if we reach bottom
+		if !m.autoScroll && m.isAtBottomOfList() {
+			m.autoScroll = true
+			m.newEventCount = 0
 		}
 		return m, nil
 
@@ -236,26 +207,14 @@ func (m Model) handlePane2Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
-		// Phase 5 - Use inspector viewport for scrolling
-		if m.inspector != nil {
-			m.inspector.ScrollDown()
-		} else {
-			// Fallback to old scrolling
-			if m.inspectorScroll < m.inspectorMaxScroll {
-				m.inspectorScroll++
-			}
+		if m.inspectorScroll < m.inspectorMaxScroll {
+			m.inspectorScroll++
 		}
 		return m, nil
 
 	case "k", "up":
-		// Phase 5 - Use inspector viewport for scrolling
-		if m.inspector != nil {
-			m.inspector.ScrollUp()
-		} else {
-			// Fallback to old scrolling
-			if m.inspectorScroll > 0 {
-				m.inspectorScroll--
-			}
+		if m.inspectorScroll > 0 {
+			m.inspectorScroll--
 		}
 		return m, nil
 
@@ -308,6 +267,20 @@ func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// MovePane1CursorUp moves cursor up in Pane 1 (project + resources)
+func (m *Model) MovePane1CursorUp() {
+	if m.pane1Cursor > -1 {
+		m.pane1Cursor--
+	}
+}
+
+// MovePane1CursorDown moves cursor down in Pane 1 (project + resources)
+func (m *Model) MovePane1CursorDown() {
+	maxCursor := 2 // ResourceFlags
+	if m.pane1Cursor < maxCursor {
+		m.pane1Cursor++
+	}
+}
 
 // handleProjectSwitch handles Enter key on project selector
 func (m Model) handleProjectSwitch() (tea.Model, tea.Cmd) {

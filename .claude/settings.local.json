@@ -11,12 +11,7 @@
       "Bash(find:*)",
       "Bash(go mod graph:*)",
       "Bash(go list:*)",
-      "Bash(tree:*)",
-      "Bash(wc:*)",
-      "Bash(go get:*)",
-      "Bash(go version:*)",
-      "Bash(go vet:*)",
-      "Bash(go test:*)"
+      "Bash(tree:*)"
     ]
   }
 }

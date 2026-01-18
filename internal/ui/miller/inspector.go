@@ -12,12 +12,6 @@ import (
 
 // renderInspector renders Pane 3 (inspector)
 func (m Model) renderInspector(width, height int) string {
-	// Phase 5 - Use inspector viewport if available
-	if m.inspector != nil {
-		return m.renderInspectorWithViewport(width, height)
-	}
-
-	// Fallback to old rendering
 	var sb strings.Builder
 
 	// Title
@@ -50,58 +44,6 @@ func (m Model) renderInspector(width, height int) string {
 		case ResourceFlags:
 			sb.WriteString(m.renderFlagInspectorScrollable(width, height))
 		}
-	}
-
-	// Wrap in styled container
-	borderStyle := GetBorderStyle(m.focus, 2)
-	content := borderStyle.
-		Width(width - 2).
-		Height(height - 2).
-		Padding(1).
-		Render(sb.String())
-
-	return content
-}
-
-// renderInspectorWithViewport renders Pane 3 using bubbles/viewport (Phase 5)
-func (m Model) renderInspectorWithViewport(width, height int) string {
-	var sb strings.Builder
-
-	// Title
-	title := "Inspector"
-	if m.inspectorData != nil {
-		title = "Details"
-	}
-
-	// Show clipboard feedback if recent (2 second TTL)
-	if !m.clipboardTime.IsZero() && time.Since(m.clipboardTime) < 2*time.Second {
-		title += " - " + m.clipboardMsg
-	}
-
-	titleStyled := styles.TitleStyle.Render(title)
-	sb.WriteString(titleStyled)
-	sb.WriteString("\n")
-
-	// Empty state or viewport content
-	if m.inspectorData == nil {
-		emptyMsg := "Select an item to view details"
-		sb.WriteString(styles.DimTextStyle.Render(emptyMsg))
-		sb.WriteString("\n")
-	} else {
-		// Adjust viewport height to account for title
-		// height - 2 for border, - 2 for padding, - 1 for title
-		viewportHeight := height - 5
-		if viewportHeight < 5 {
-			viewportHeight = 5
-		}
-
-		// Resize viewport to fit available space
-		if m.inspector != nil {
-			m.inspector.SetSize(width-4, viewportHeight)
-		}
-
-		// Use viewport
-		sb.WriteString(m.inspector.View())
 	}
 
 	// Wrap in styled container

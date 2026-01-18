@@ -67,32 +67,3 @@ func (m *Model) MoveFocusLeft() {
 		// Stay at Pane 1
 	}
 }
-
-// Phase 2 - Navigation enhancements
-
-// TogglePane1Collapse toggles the sidebar between full and icon-only mode
-func (m *Model) TogglePane1Collapse() {
-	m.pane1Collapsed = !m.pane1Collapsed
-
-	// Phase 3 - Update sidebar collapsed state
-	if m.sidebar != nil {
-		m.sidebar.SetCollapsed(m.pane1Collapsed)
-
-		// Resize sidebar to match new collapsed state
-		pane1Width := 10 // collapsed width
-		if !m.pane1Collapsed {
-			pane1Width = m.width * 15 / 100
-			if pane1Width < 20 {
-				pane1Width = 20
-			}
-		}
-		m.sidebar.SetSize(pane1Width-2, m.height-5)
-	}
-}
-
-// JumpToPane jumps directly to a specific pane
-func (m *Model) JumpToPane(pane Focus) {
-	if pane >= FocusPane1 && pane <= FocusPane3 {
-		m.focus = pane
-	}
-}

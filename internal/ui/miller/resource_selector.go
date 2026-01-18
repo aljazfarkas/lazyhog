@@ -1,6 +1,9 @@
 package miller
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/aljazfarkas/lazyhog/internal/ui/styles"
 )
 
@@ -41,54 +44,101 @@ func (r Resource) Icon() string {
 	}
 }
 
+// renderProjectSection renders the project selector at the top of Pane 1
+func (m Model) renderProjectSection() string {
+	var sb strings.Builder
+
+	// Project header with icon
+	header := "📁 Project"
+	sb.WriteString(styles.DimTextStyle.Render(header))
+	sb.WriteString("\n")
+
+	// Project name (highlight if cursor is on project)
+	projectName := "Loading..."
+	if m.projectsLoaded {
+		if len(m.availableProjects) == 0 {
+			projectName = "No projects"
+		} else if m.selectedProjectID == 0 {
+			projectName = "No selection"
+		} else {
+			// Find current project name
+			for _, proj := range m.availableProjects {
+				if proj.ID == m.selectedProjectID {
+					projectName = proj.Name
+					break
+				}
+			}
+			// If still not found, show ID
+			if projectName == "Loading..." {
+				projectName = fmt.Sprintf("Project #%d", m.selectedProjectID)
+			}
+		}
+	}
+
+	// Highlight if cursor is on project (pane1Cursor == -1)
+	isSelected := (m.focus == FocusPane1 && m.pane1Cursor == -1)
+
+	if isSelected {
+		projectLine := styles.SelectedListItemStyle.Render("▶ " + projectName)
+		sb.WriteString(projectLine)
+	} else {
+		projectLine := styles.ListItemStyle.Render("  " + projectName)
+		sb.WriteString(projectLine)
+	}
+
+	return sb.String()
+}
 
 // renderResourceSelector renders Pane 1 (resource selector)
 func (m Model) renderResourceSelector(width, height int) string {
-	// Phase 3 - Use bubbles/list sidebar if available
-	if m.sidebar != nil {
-		// Calculate available height for sidebar
-		// Account for polling indicator (2 lines with spacing)
-		extraLines := 0
-		if m.selectedResource == ResourceEvents {
-			extraLines = 2
+	var sb strings.Builder
+
+	// Add project section at top
+	sb.WriteString(m.renderProjectSection())
+	sb.WriteString("\n\n") // Extra spacing between sections
+
+	// Resource rendering
+	resources := []Resource{ResourceEvents, ResourcePersons, ResourceFlags}
+
+	for i, resource := range resources {
+		// Check if THIS resource is selected based on cursor position
+		selected := (m.focus == FocusPane1 && m.pane1Cursor == i)
+
+		icon := resource.Icon()
+		label := resource.String()
+
+		line := fmt.Sprintf("%s %s", icon, label)
+
+		if selected {
+			line = styles.SelectedListItemStyle.Render("▶ " + line)
+		} else {
+			line = styles.ListItemStyle.Render("  " + line)
 		}
 
-		// height - 2 for border, - 2 for padding, - extraLines for indicator
-		sidebarHeight := height - 4 - extraLines
-		if sidebarHeight < 5 {
-			sidebarHeight = 5
+		sb.WriteString(line)
+		if i < len(resources)-1 {
+			sb.WriteString("\n")
 		}
-
-		// Ensure sidebar is properly sized
-		m.sidebar.SetSize(width-4, sidebarHeight)
-		m.sidebar.SetCollapsed(m.pane1Collapsed)
-
-		// Get sidebar view
-		sidebarContent := m.sidebar.View()
-
-		// Add polling indicator if on Events
-		if m.selectedResource == ResourceEvents {
-			var indicator string
-			if m.isPolling {
-				indicator = styles.SuccessTextStyle.Render("● Live")
-			} else {
-				indicator = styles.DimTextStyle.Render("⏸ Paused")
-			}
-			sidebarContent += "\n\n" + indicator
-		}
-
-		// Wrap in border
-		borderStyle := GetBorderStyle(m.focus, 0)
-		content := borderStyle.
-			Width(width - 2).
-			Height(height - 2).
-			Padding(1).
-			Render(sidebarContent)
-
-		return content
 	}
 
-	// Sidebar should always be initialized, but as a safety measure
-	return ""
-}
+	// Add polling indicator if on Events
+	if m.selectedResource == ResourceEvents && m.isPolling {
+		sb.WriteString("\n\n")
+		indicator := styles.SuccessTextStyle.Render("● Live")
+		sb.WriteString(indicator)
+	} else if m.selectedResource == ResourceEvents && !m.isPolling {
+		sb.WriteString("\n\n")
+		indicator := styles.DimTextStyle.Render("⏸ Paused")
+		sb.WriteString(indicator)
+	}
 
+	// Wrap in styled container
+	borderStyle := GetBorderStyle(m.focus, 0)
+	content := borderStyle.
+		Width(width - 2).
+		Height(height - 2).
+		Padding(1).
+		Render(sb.String())
+
+	return content
+}
