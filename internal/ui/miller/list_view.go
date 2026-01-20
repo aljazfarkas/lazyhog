@@ -9,12 +9,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// List item truncation lengths
+const (
+	maxEventNameLen   = 25
+	maxDistinctIDLen  = 20
+	maxPersonNameLen  = 25
+	maxFlagKeyLen     = 35
+)
+
 // ListItem represents an item that can be displayed in Pane 2
 type ListItem interface {
 	RenderLine(width int, selected bool) string
 	GetID() string
 	GetInspectorData() interface{}
-	GetDistinctID() string // For pivot feature
+	GetDistinctID() string    // For pivot feature
+	GetSearchableText() string // Returns plain text for search filtering (no ANSI codes)
 }
 
 // EventListItem wraps a client.Event for list display
@@ -28,9 +37,6 @@ func (e EventListItem) RenderLine(width int, selected bool) string {
 	distinctID := e.Event.DistinctID
 
 	// Truncate if needed
-	maxEventNameLen := 25
-	maxDistinctIDLen := 20
-
 	if len(eventName) > maxEventNameLen {
 		eventName = styles.TruncateString(eventName, maxEventNameLen)
 	}
@@ -68,6 +74,10 @@ func (e EventListItem) GetDistinctID() string {
 	return e.Event.DistinctID
 }
 
+func (e EventListItem) GetSearchableText() string {
+	return e.Event.Event + " " + e.Event.DistinctID
+}
+
 // PersonListItem wraps a client.Person for list display
 type PersonListItem struct {
 	Person client.Person
@@ -85,11 +95,8 @@ func (p PersonListItem) RenderLine(width int, selected bool) string {
 	}
 
 	// Truncate if needed
-	maxNameLen := 25
-	maxDistinctIDLen := 20
-
-	if len(name) > maxNameLen {
-		name = styles.TruncateString(name, maxNameLen)
+	if len(name) > maxPersonNameLen {
+		name = styles.TruncateString(name, maxPersonNameLen)
 	}
 	if len(distinctID) > maxDistinctIDLen {
 		distinctID = styles.TruncateString(distinctID, maxDistinctIDLen)
@@ -124,6 +131,14 @@ func (p PersonListItem) GetDistinctID() string {
 	return ""
 }
 
+func (p PersonListItem) GetSearchableText() string {
+	text := p.Person.Name
+	for _, id := range p.Person.DistinctIDs {
+		text += " " + id
+	}
+	return text
+}
+
 // FlagListItem wraps a client.FeatureFlag for list display
 type FlagListItem struct {
 	Flag client.FeatureFlag
@@ -139,10 +154,8 @@ func (f FlagListItem) RenderLine(width int, selected bool) string {
 	}
 
 	// Truncate if needed
-	maxKeyLen := 35
-
-	if len(key) > maxKeyLen {
-		key = styles.TruncateString(key, maxKeyLen)
+	if len(key) > maxFlagKeyLen {
+		key = styles.TruncateString(key, maxFlagKeyLen)
 	}
 
 	line := fmt.Sprintf("%s %s", status, key)
@@ -166,6 +179,10 @@ func (f FlagListItem) GetInspectorData() interface{} {
 
 func (f FlagListItem) GetDistinctID() string {
 	return "" // Flags don't have distinct IDs
+}
+
+func (f FlagListItem) GetSearchableText() string {
+	return f.Flag.Key + " " + f.Flag.Name
 }
 
 // renderListView renders Pane 2 (list view)

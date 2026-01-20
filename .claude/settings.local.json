@@ -12,7 +12,10 @@
       "Bash(go mod graph:*)",
       "Bash(go list:*)",
       "Bash(tree:*)",
-      "Bash(go get:*)"
+      "Bash(go get:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(go test:*)"
     ]
   }
 }

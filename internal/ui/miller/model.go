@@ -20,68 +20,79 @@ const (
 	maxPersons        = 50
 	pollInterval      = 2 * time.Second
 	pausePollDuration = 30 * time.Second
+
+	// Pane width ratios (percentages)
+	pane1WidthPercent = 15
+	pane2WidthPercent = 35
+	// pane3 gets the remainder
+
+	// Minimum pane widths
+	minPane1Width = 20
+	minPane2Width = 30
+	minPane3Width = 40
+
+	// Narrow terminal threshold
+	narrowTerminalWidth = 100
 )
 
 // Model represents the Miller Columns TUI state
 type Model struct {
-	client *client.Client
+	client client.PostHogClient
 	width  int
 	height int
 
-	// Focus and resource selection
+	// --- Focus and Navigation ---
 	focus            Focus
 	selectedResource Resource
+	pane1Cursor      int // -1 = project, 0 = Events, 1 = Persons, 2 = Flags
 
-	// Project selection state
+	// --- Project State ---
 	availableProjects []client.Project
 	selectedProjectID int
-	pane1Cursor       int  // -1 = project, 0 = Events, 1 = Persons, 2 = Flags
 	projectsLoaded    bool
 
-	// List view (Pane 2)
-	listItems  []ListItem
-	listCursor int
+	// --- List State (Pane 2) ---
+	listItems     []ListItem
+	listCursor    int
+	filteredItems []ListItem // nil means no filter active
 
-	// Inspector (Pane 3)
-	inspectorData interface{}
+	// --- Inspector State (Pane 3) ---
+	inspectorData     interface{}
+	inspectorViewport viewport.Model
+	jsonFoldState     map[string]bool // JSON path -> folded status
+	allFolded         bool
 
-	// Polling state
-	isPolling         bool
-	lastInteraction   time.Time
-	lastPoll          time.Time
+	// --- Auto-scroll State ---
+	autoScroll      bool
+	newEventCount   int
+	lastSeenEventID string
 
-	// Loading and error state
-	loading bool
-	err     error
-
-	// UI Mode State
-	showHelp    bool
+	// --- Search State ---
 	searchMode  bool
 	searchInput textinput.Model
 
-	// Auto-scroll state (Pane2)
-	autoScroll      bool   // Whether auto-scroll is active
-	newEventCount   int    // Count of new events since scroll up
-	lastSeenEventID string // ID of last event when scroll detached
+	// --- Polling State ---
+	isPolling       bool
+	lastInteraction time.Time
+	lastPoll        time.Time
 
-	// Search/filter state
-	filteredItems []ListItem // Filtered list items (nil means no filter active)
+	// --- Clipboard State ---
+	clipboardMsg  string
+	clipboardTime time.Time
 
-	// JSON folding state (Pane 3)
-	jsonFoldState map[string]bool // JSON path -> folded status
-	allFolded     bool            // All top-level keys folded
+	// --- Debounce State ---
+	pendingResourceFetch *Resource
+	lastDebounceTime     time.Time
 
-	// Clipboard feedback
-	clipboardMsg  string    // Temporary message (2 second TTL)
-	clipboardTime time.Time // When clipboard message was set
+	// --- Loading and Error State ---
+	loading bool
+	err     error
 
-	// Debounce state for Pane 1 resource selection
-	pendingResourceFetch *Resource // nil if no pending fetch
-	lastDebounceTime     time.Time // timestamp of last debounce
+	// --- UI Mode State ---
+	showHelp bool
 
-	// UI Components
-	spinner           spinner.Model
-	inspectorViewport viewport.Model
+	// --- UI Components ---
+	spinner spinner.Model
 }
 
 // Messages
@@ -92,12 +103,13 @@ type flagsMsg []client.FeatureFlag
 type projectsMsg []client.Project
 type errorMsg struct{ err error }
 type pivotMsg struct {
-	person *client.Person
-	events []client.Event
+	person      *client.Person
+	events      []client.Event
+	eventsError error // Non-fatal error when fetching events
 }
 
 // New creates a new Miller Columns model
-func New(c *client.Client) Model {
+func New(c client.PostHogClient) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = styles.SpinnerStyle
@@ -108,23 +120,30 @@ func New(c *client.Client) Model {
 		selectedResource:     ResourceEvents,
 		pane1Cursor:          0, // Start on Events
 		availableProjects:    []client.Project{},
+		selectedProjectID:    0,
 		projectsLoaded:       false,
 		listItems:            []ListItem{},
 		listCursor:           0,
+		filteredItems:        nil,
+		inspectorData:        nil,
+		inspectorViewport:    viewport.New(0, 0), // Will be sized on WindowSizeMsg
+		jsonFoldState:        make(map[string]bool),
+		allFolded:            false,
+		autoScroll:           true,
+		newEventCount:        0,
+		lastSeenEventID:      "",
+		searchMode:           false,
+		searchInput:          textinput.Model{},
 		isPolling:            true,
 		lastInteraction:      time.Now(),
 		lastPoll:             time.Now(),
-		loading:              true,
-		autoScroll:           true,
-		newEventCount:        0,
-		searchMode:           false,
-		jsonFoldState:        make(map[string]bool),
-		allFolded:            false,
-		filteredItems:        nil,
+		clipboardMsg:         "",
+		clipboardTime:        time.Time{},
 		pendingResourceFetch: nil,
 		lastDebounceTime:     time.Time{},
+		loading:              true,
+		showHelp:             false,
 		spinner:              s,
-		inspectorViewport:    viewport.New(0, 0), // Will be sized on WindowSizeMsg
 	}
 }
 
@@ -156,12 +175,12 @@ func (m Model) fetchCurrentResource() tea.Cmd {
 	}
 }
 
-func fetchEvents(c *client.Client) tea.Cmd {
+func fetchEvents(c client.PostHogClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		events, err := c.GetRecentEvents(ctx, maxEvents)
+		events, err := c.ListRecentEvents(ctx, maxEvents)
 		if err != nil {
 			return errorMsg{err: err}
 		}
@@ -169,7 +188,7 @@ func fetchEvents(c *client.Client) tea.Cmd {
 	}
 }
 
-func fetchPersons(c *client.Client) tea.Cmd {
+func fetchPersons(c client.PostHogClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -182,7 +201,7 @@ func fetchPersons(c *client.Client) tea.Cmd {
 	}
 }
 
-func fetchFlags(c *client.Client) tea.Cmd {
+func fetchFlags(c client.PostHogClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -195,7 +214,7 @@ func fetchFlags(c *client.Client) tea.Cmd {
 	}
 }
 
-func fetchProjects(c *client.Client) tea.Cmd {
+func fetchProjects(c client.PostHogClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -369,7 +388,7 @@ func (m Model) View() string {
 	var content string
 
 	// Check for narrow terminal
-	if m.width < 100 {
+	if m.width < narrowTerminalWidth {
 		// Single pane mode with breadcrumb
 		content = m.renderNarrowView()
 	} else {
@@ -395,7 +414,7 @@ func (m Model) calculatePaneWidths() (int, int, int) {
 	totalWidth := m.width
 
 	// Handle narrow terminals
-	if totalWidth < 100 {
+	if totalWidth < narrowTerminalWidth {
 		// Single pane mode (simplified for now - will enhance later)
 		switch m.focus {
 		case FocusPane1:
@@ -408,20 +427,19 @@ func (m Model) calculatePaneWidths() (int, int, int) {
 	}
 
 	// Standard 3-pane layout
-	// Pane 1: 15% | Pane 2: 35% | Pane 3: 50%
-	pane1Width := totalWidth * 15 / 100
-	pane2Width := totalWidth * 35 / 100
+	pane1Width := totalWidth * pane1WidthPercent / 100
+	pane2Width := totalWidth * pane2WidthPercent / 100
 	pane3Width := totalWidth - pane1Width - pane2Width
 
 	// Ensure minimum widths
-	if pane1Width < 20 {
-		pane1Width = 20
+	if pane1Width < minPane1Width {
+		pane1Width = minPane1Width
 	}
-	if pane2Width < 30 {
-		pane2Width = 30
+	if pane2Width < minPane2Width {
+		pane2Width = minPane2Width
 	}
-	if pane3Width < 40 {
-		pane3Width = 40
+	if pane3Width < minPane3Width {
+		pane3Width = minPane3Width
 	}
 
 	return pane1Width, pane2Width, pane3Width
@@ -511,7 +529,7 @@ func (m Model) renderFooter() string {
 		// Context-specific shortcuts based on focus
 		switch m.focus {
 		case FocusPane1:
-			if m.pane1Cursor == -1 {
+			if m.pane1Cursor == pane1CursorProject {
 				// On project selector
 				shortcuts = append([]string{
 					styles.KeyStyle.Render("j/k") + " navigate",

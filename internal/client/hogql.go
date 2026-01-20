@@ -55,7 +55,7 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (*QueryResult, 
 
 	resp, err := c.post(ctx, path, reqData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ExecuteQuery: %w", err)
 	}
 	defer resp.Body.Close()
 

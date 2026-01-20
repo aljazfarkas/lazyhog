@@ -29,18 +29,15 @@ type FlagsResponse struct {
 
 // ListFlags fetches all feature flags
 func (c *Client) ListFlags(ctx context.Context) ([]FeatureFlag, error) {
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("ListFlags: %w", err)
 	}
 
 	path := fmt.Sprintf("%s/feature_flags/", c.getProjectPath())
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ListFlags: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -59,11 +56,8 @@ func (c *Client) ListFlags(ctx context.Context) ([]FeatureFlag, error) {
 
 // ToggleFlag updates a feature flag's active status
 func (c *Client) ToggleFlag(ctx context.Context, flagID int, active bool) error {
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return fmt.Errorf("ToggleFlag: %w", err)
 	}
 
 	path := fmt.Sprintf("%s/feature_flags/%d/", c.getProjectPath(), flagID)
@@ -74,7 +68,7 @@ func (c *Client) ToggleFlag(ctx context.Context, flagID int, active bool) error 
 
 	resp, err := c.patch(ctx, path, data)
 	if err != nil {
-		return err
+		return fmt.Errorf("ToggleFlag: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -83,18 +77,15 @@ func (c *Client) ToggleFlag(ctx context.Context, flagID int, active bool) error 
 
 // GetFlag fetches a single feature flag by ID
 func (c *Client) GetFlag(ctx context.Context, flagID int) (*FeatureFlag, error) {
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("GetFlag: %w", err)
 	}
 
 	path := fmt.Sprintf("%s/feature_flags/%d/", c.getProjectPath(), flagID)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetFlag: %w", err)
 	}
 	defer resp.Body.Close()
 

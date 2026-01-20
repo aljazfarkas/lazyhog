@@ -66,7 +66,11 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 	// Read body for debugging (if present)
 	var bodyBytes []byte
 	if body != nil {
-		bodyBytes, _ = io.ReadAll(body)
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read request body: %w", err)
+		}
 		body = bytes.NewReader(bodyBytes)
 	}
 
@@ -218,6 +222,16 @@ func (c *Client) GetProjectID() int {
 	return c.projectID
 }
 
+// ensureProjectInitialized ensures the project ID is set, initializing if needed
+func (c *Client) ensureProjectInitialized(ctx context.Context) error {
+	if c.projectID == 0 {
+		if err := c.InitializeProject(ctx); err != nil {
+			return fmt.Errorf("failed to initialize project: %w", err)
+		}
+	}
+	return nil
+}
+
 // getProjectPath returns the project API path prefix
 func (c *Client) getProjectPath() string {
 	if c.projectID > 0 {
@@ -230,7 +244,7 @@ func (c *Client) getProjectPath() string {
 func (c *Client) FetchProjects(ctx context.Context) ([]Project, error) {
 	resp, err := c.get(ctx, "/api/users/@me/")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("FetchProjects: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -244,7 +258,7 @@ func (c *Client) FetchProjects(ctx context.Context) ([]Project, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("FetchProjects: failed to decode response: %w", err)
 	}
 
 	projects := make([]Project, len(userInfo.Organization.Teams))

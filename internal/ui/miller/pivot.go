@@ -26,7 +26,7 @@ func (m Model) handlePivot() (tea.Model, tea.Cmd) {
 }
 
 // fetchPersonByDistinctID fetches a person and their recent events
-func fetchPersonByDistinctID(c *client.Client, distinctID string) tea.Cmd {
+func fetchPersonByDistinctID(c client.PostHogClient, distinctID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -36,15 +36,16 @@ func fetchPersonByDistinctID(c *client.Client, distinctID string) tea.Cmd {
 			return errorMsg{err: err}
 		}
 
-		events, err := c.GetPersonEvents(ctx, distinctID, 20)
-		if err != nil {
-			// Don't fail if events fail, just return empty
+		events, eventsErr := c.GetPersonEvents(ctx, distinctID, 20)
+		if eventsErr != nil {
+			// Don't fail completely if events fail, continue with empty events
 			events = []client.Event{}
 		}
 
 		return pivotMsg{
-			person: person,
-			events: events,
+			person:      person,
+			events:      events,
+			eventsError: eventsErr,
 		}
 	}
 }

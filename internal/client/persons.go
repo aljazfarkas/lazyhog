@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"time"
 )
 
 // Person represents a PostHog person
@@ -28,11 +27,8 @@ type PersonsResponse struct {
 
 // GetPerson fetches a person by distinct ID
 func (c *Client) GetPerson(ctx context.Context, distinctID string) (*Person, error) {
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("GetPerson: %w", err)
 	}
 
 	// We need to search for the person by distinct_id
@@ -40,7 +36,7 @@ func (c *Client) GetPerson(ctx context.Context, distinctID string) (*Person, err
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetPerson: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -87,49 +83,12 @@ func (c *Client) GetPersonEvents(ctx context.Context, distinctID string, limit i
 		return nil, fmt.Errorf("failed to query person events: %w", err)
 	}
 
-	// Map query results to Event structs using the same logic as GetRecentEvents
+	// Map query results to Event structs
 	events := make([]Event, 0, len(result.Results))
 	for _, row := range result.Results {
-		if len(row) < 6 {
-			continue
+		if event, ok := parseEventFromRow(row); ok {
+			events = append(events, event)
 		}
-
-		event := Event{}
-
-		// UUID (column 0)
-		if uuid, ok := row[0].(string); ok {
-			event.UUID = uuid
-			event.ID = uuid
-		}
-
-		// Event name (column 1)
-		if eventName, ok := row[1].(string); ok {
-			event.Event = eventName
-		}
-
-		// Timestamp (column 2)
-		if ts, ok := row[2].(string); ok {
-			if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
-				event.Timestamp = parsed
-			}
-		}
-
-		// Distinct ID (column 3)
-		if distinctID, ok := row[3].(string); ok {
-			event.DistinctID = distinctID
-		}
-
-		// Properties (column 4)
-		if props, ok := row[4].(map[string]interface{}); ok {
-			event.Properties = props
-		}
-
-		// Person ID (column 5)
-		if personID, ok := row[5].(string); ok {
-			event.PersonID = personID
-		}
-
-		events = append(events, event)
 	}
 
 	return events, nil
@@ -141,18 +100,15 @@ func (c *Client) ListPersons(ctx context.Context, limit int) ([]Person, error) {
 		limit = 50
 	}
 
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("ListPersons: %w", err)
 	}
 
 	path := fmt.Sprintf("%s/persons/?limit=%d", c.getProjectPath(), limit)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ListPersons: %w", err)
 	}
 	defer resp.Body.Close()
 

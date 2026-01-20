@@ -54,7 +54,7 @@ func (m Model) handleSearchKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // applyFilter filters list items by substring match
-// Searches in the rendered line content (case-insensitive)
+// Searches in the searchable text (case-insensitive, no ANSI codes)
 func (m Model) applyFilter(items []ListItem, query string) []ListItem {
 	if query == "" {
 		return items
@@ -64,9 +64,9 @@ func (m Model) applyFilter(items []ListItem, query string) []ListItem {
 	var filtered []ListItem
 
 	for _, item := range items {
-		// Render the item and search in the rendered text
-		rendered := item.RenderLine(100, false) // Use a reasonable width
-		if strings.Contains(strings.ToLower(rendered), query) {
+		// Search in the plain text content (no ANSI codes)
+		searchText := item.GetSearchableText()
+		if strings.Contains(strings.ToLower(searchText), query) {
 			filtered = append(filtered, item)
 		}
 	}

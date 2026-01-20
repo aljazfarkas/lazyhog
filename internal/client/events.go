@@ -26,8 +26,8 @@ type EventsResponse struct {
 	Results  []Event `json:"results"`
 }
 
-// GetRecentEvents fetches recent events using the Query API with HogQL
-func (c *Client) GetRecentEvents(ctx context.Context, limit int) ([]Event, error) {
+// ListRecentEvents fetches recent events using the Query API with HogQL
+func (c *Client) ListRecentEvents(ctx context.Context, limit int) ([]Event, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -54,46 +54,9 @@ func (c *Client) GetRecentEvents(ctx context.Context, limit int) ([]Event, error
 	// Map query results to Event structs
 	events := make([]Event, 0, len(result.Results))
 	for _, row := range result.Results {
-		if len(row) < 6 {
-			continue
+		if event, ok := parseEventFromRow(row); ok {
+			events = append(events, event)
 		}
-
-		event := Event{}
-
-		// UUID (column 0)
-		if uuid, ok := row[0].(string); ok {
-			event.UUID = uuid
-			event.ID = uuid // Use UUID as ID
-		}
-
-		// Event name (column 1)
-		if eventName, ok := row[1].(string); ok {
-			event.Event = eventName
-		}
-
-		// Timestamp (column 2)
-		if ts, ok := row[2].(string); ok {
-			if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
-				event.Timestamp = parsed
-			}
-		}
-
-		// Distinct ID (column 3)
-		if distinctID, ok := row[3].(string); ok {
-			event.DistinctID = distinctID
-		}
-
-		// Properties (column 4)
-		if props, ok := row[4].(map[string]interface{}); ok {
-			event.Properties = props
-		}
-
-		// Person ID (column 5)
-		if personID, ok := row[5].(string); ok {
-			event.PersonID = personID
-		}
-
-		events = append(events, event)
 	}
 
 	return events, nil
@@ -101,18 +64,15 @@ func (c *Client) GetRecentEvents(ctx context.Context, limit int) ([]Event, error
 
 // GetEvent fetches a single event by ID
 func (c *Client) GetEvent(ctx context.Context, eventID string) (*Event, error) {
-	// Ensure project ID is initialized
-	if c.projectID == 0 {
-		if err := c.InitializeProject(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize project: %w", err)
-		}
+	if err := c.ensureProjectInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("GetEvent: %w", err)
 	}
 
 	path := fmt.Sprintf("%s/events/%s/", c.getProjectPath(), eventID)
 
 	resp, err := c.get(ctx, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetEvent: %w", err)
 	}
 	defer resp.Body.Close()
 

@@ -75,8 +75,8 @@ func (m Model) renderProjectSection() string {
 		}
 	}
 
-	// Highlight if cursor is on project (pane1Cursor == -1)
-	isSelected := (m.focus == FocusPane1 && m.pane1Cursor == -1)
+	// Highlight if cursor is on project
+	isSelected := (m.focus == FocusPane1 && m.pane1Cursor == pane1CursorProject)
 
 	if isSelected {
 		projectLine := styles.SelectedListItemStyle.Render("▶ " + projectName)

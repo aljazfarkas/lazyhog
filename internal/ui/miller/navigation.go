@@ -6,6 +6,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	// pane1CursorProject indicates the cursor is on the project selector row
+	pane1CursorProject = -1
+
+	// maxResourceCursor is the maximum value for pane1Cursor when on a resource
+	// (0 = Events, 1 = Persons, 2 = Flags)
+	maxResourceCursor = 2
+)
+
 // handleKeyPress handles all keyboard input based on current focus
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Record interaction for polling pause
@@ -121,38 +130,20 @@ func (m Model) handlePane1Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		// Only handle project cycling
-		if m.pane1Cursor == -1 {
+		if m.pane1Cursor == pane1CursorProject {
 			return m.handleProjectSwitch()
 		}
 		// No-op if on resource (auto-selection already happened)
 		return m, nil
 
 	case "1":
-		m.pane1Cursor = 0
-		m.selectedResource = ResourceEvents
-		m.pendingResourceFetch = nil // Cancel any pending debounce
-		m.loading = true
-		m.listCursor = 0
-		m.inspectorData = nil
-		return m, m.fetchCurrentResource()
+		return m, m.selectResource(ResourceEvents)
 
 	case "2":
-		m.pane1Cursor = 1
-		m.selectedResource = ResourcePersons
-		m.pendingResourceFetch = nil // Cancel any pending debounce
-		m.loading = true
-		m.listCursor = 0
-		m.inspectorData = nil
-		return m, m.fetchCurrentResource()
+		return m, m.selectResource(ResourcePersons)
 
 	case "3":
-		m.pane1Cursor = 2
-		m.selectedResource = ResourceFlags
-		m.pendingResourceFetch = nil // Cancel any pending debounce
-		m.loading = true
-		m.listCursor = 0
-		m.inspectorData = nil
-		return m, m.fetchCurrentResource()
+		return m, m.selectResource(ResourceFlags)
 	}
 
 	return m, nil
@@ -271,17 +262,28 @@ func (m Model) handlePane3Keys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// selectResource handles direct resource selection via number keys (1, 2, 3)
+// and returns the command to fetch the resource data
+func (m *Model) selectResource(resource Resource) tea.Cmd {
+	m.pane1Cursor = int(resource)
+	m.selectedResource = resource
+	m.pendingResourceFetch = nil // Cancel any pending debounce
+	m.loading = true
+	m.listCursor = 0
+	m.inspectorData = nil
+	return m.fetchCurrentResource()
+}
+
 // MovePane1CursorUp moves cursor up in Pane 1 (project + resources)
 func (m *Model) MovePane1CursorUp() {
-	if m.pane1Cursor > -1 {
+	if m.pane1Cursor > pane1CursorProject {
 		m.pane1Cursor--
 	}
 }
 
 // MovePane1CursorDown moves cursor down in Pane 1 (project + resources)
 func (m *Model) MovePane1CursorDown() {
-	maxCursor := 2 // ResourceFlags
-	if m.pane1Cursor < maxCursor {
+	if m.pane1Cursor < maxResourceCursor {
 		m.pane1Cursor++
 	}
 }
