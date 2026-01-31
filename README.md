@@ -1,4 +1,4 @@
-# lazyhog 🦔
+# lazyhog 🦔 (WIP)
 
 A blazing-fast Terminal User Interface for PostHog, built with Go and the Charm stack.
 
